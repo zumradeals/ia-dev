@@ -1,0 +1,25 @@
+version: "3.9"
+# DevLab — Stack web + proxy seule
+# Usage : docker compose -f docker/stacks/web-only.yml up -d
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: devlab-web-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - web_static:/var/www/html
+    ports:
+      - "8088:80"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: devlab-web-mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  web_static:

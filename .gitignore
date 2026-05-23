@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────
+# DevLab — .gitignore
+# ─────────────────────────────────────────────
+
+# Secrets — jamais commités
+config/secrets.env
+config/local.env
+
+# State runtime (auto-généré)
+state/registry.json
+state/checksums.sha256
+
+# Logs (volumétriques)
+logs/
+
+# Backups locaux
+backups/
+
+# Workspace (projets utilisateur)
+workspace/
+repositories/
+
+# Fichiers OS
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Temporaires
+*.tmp
+*.bak.*
+.env.local
+
+# Node (si templates)
+node_modules/
+.pnpm-store/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Éditeurs
+.vscode/
+.idea/
+*.code-workspace

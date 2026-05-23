@@ -1,0 +1,30 @@
+version: "3.9"
+# DevLab — Stack bases de données seules
+# Usage : docker compose -f docker/stacks/db-only.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: devlab-db-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devlab}
+      POSTGRES_DB: devlab
+    volumes:
+      - postgres_db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: devlab-db-redis
+    restart: unless-stopped
+    volumes:
+      - redis_db_data:/data
+    ports:
+      - "127.0.0.1:6380:6379"
+
+volumes:
+  postgres_db_data:
+  redis_db_data:

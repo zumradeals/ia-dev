@@ -1,0 +1,367 @@
+#!/usr/bin/env bash
+# bin/devlab — Point d'entrée CLI du DevLab
+# Usage : devlab <command> [options]
+
+set -euo pipefail
+
+# ─────────────────────────────────────────────
+# BOOTSTRAP INTERNE
+# ─────────────────────────────────────────────
+DEVLAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export DEVLAB_ROOT
+
+# shellcheck source=../lib/core.sh
+source "${DEVLAB_ROOT}/lib/core.sh"
+# shellcheck source=../lib/state.sh
+source "${DEVLAB_ROOT}/lib/state.sh"
+# shellcheck source=../lib/checks.sh
+source "${DEVLAB_ROOT}/lib/checks.sh"
+# shellcheck source=../lib/packages.sh
+source "${DEVLAB_ROOT}/lib/packages.sh"
+
+DEVLAB_MODULE="devlab"
+log_init "devlab" "maintenance"
+
+# ─────────────────────────────────────────────
+# AIDE
+# ─────────────────────────────────────────────
+usage() {
+    cat << EOF
+
+${C_BOLD}DevLab${C_RESET} — AI Development Laboratory Bootstrap v1.0
+
+${C_BOLD}Usage :${C_RESET}
+  devlab <command> [options]
+
+${C_BOLD}Commandes :${C_RESET}
+  ${C_GREEN}bootstrap${C_RESET}               Bootstrap système initial (root requis)
+  ${C_GREEN}install${C_RESET} [module|all]     Installe un module ou tous les modules activés
+  ${C_GREEN}status${C_RESET}                   Affiche l'état de tous les modules
+  ${C_GREEN}check${C_RESET}                    Vérifie les versions installées
+  ${C_GREEN}update${C_RESET}                   Met à jour le système et les outils
+  ${C_GREEN}backup${C_RESET}                   Sauvegarde les configurations
+  ${C_GREEN}restore${C_RESET} <backup_id>      Restaure depuis un backup
+  ${C_GREEN}health${C_RESET}                   Diagnostic de santé complet
+  ${C_GREEN}sync${C_RESET}                     Réconcilie le registre avec l'état réel
+  ${C_GREEN}reset${C_RESET} [module]           Réinitialise un module dans le registre
+  ${C_GREEN}list-modules${C_RESET}             Liste tous les modules disponibles
+  ${C_GREEN}help${C_RESET}                     Affiche cette aide
+
+${C_BOLD}Options globales :${C_RESET}
+  --dry-run      Simule sans exécuter
+  --yes          Répond oui à toutes les confirmations
+  --debug        Active les logs DEBUG
+  --no-color     Désactive les couleurs
+
+${C_BOLD}Exemples :${C_RESET}
+  sudo devlab bootstrap             # Bootstrap initial (root)
+  devlab install all                # Installe tous les modules activés
+  devlab install languages/nodejs   # Installe Node.js uniquement
+  devlab status                     # Voir ce qui est installé
+  devlab health                     # Diagnostic complet
+  devlab backup                     # Sauvegarder les configs
+
+${C_BOLD}Modules disponibles :${C_RESET}
+  base/system-tools          containers/docker
+  languages/nodejs           containers/compose
+  languages/python           databases/postgresql
+  languages/php              databases/mariadb
+  languages/golang           databases/redis
+  languages/rust             web/nginx
+  devtools/zsh               ai/claude-code
+  devtools/tmux              ai/openai-codex
+  devtools/fzf               testing/playwright
+  devtools/modern-cli        testing/vitest-jest
+  devtools/code-server        testing/pytest
+                             testing/phpunit
+
+EOF
+}
+
+# ─────────────────────────────────────────────
+# PARSEUR D'OPTIONS GLOBALES
+# ─────────────────────────────────────────────
+parse_global_opts() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)   export DEVLAB_DRY_RUN="true"; shift ;;
+            --yes)       export DEVLAB_AUTO_CONFIRM="true"; shift ;;
+            --debug)     export LOG_LEVEL="DEBUG"; shift ;;
+            --no-color)  export NO_COLOR="1"; shift ;;
+            *)           break ;;
+        esac
+    done
+    # Retourne les args restants
+    echo "$@"
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : bootstrap
+# ─────────────────────────────────────────────
+cmd_bootstrap() {
+    require_root
+    devlab_banner
+    log_section "Bootstrap système DevLab"
+
+    local bootstrap_dir="${DEVLAB_ROOT}/bootstrap"
+    local scripts=("00-preflight.sh" "10-base-packages.sh" "20-security.sh" "30-users-groups.sh" "40-directories.sh")
+
+    for script in "${scripts[@]}"; do
+        local script_path="${bootstrap_dir}/${script}"
+        if [[ ! -f "$script_path" ]]; then
+            log_warn "Script bootstrap manquant : ${script} — ignoré"
+            continue
+        fi
+        log_section "Bootstrap : ${script}"
+        bash "$script_path"
+    done
+
+    log_ok "Bootstrap terminé"
+    echo
+    log_info "Prochaine étape : devlab install all"
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : install
+# ─────────────────────────────────────────────
+cmd_install() {
+    local target="${1:-all}"
+
+    devlab_banner
+    log_section "Installation : ${target}"
+
+    if [[ "$target" == "all" ]]; then
+        _install_all_enabled
+    else
+        _install_module "$target"
+    fi
+}
+
+_install_all_enabled() {
+    local modules_conf="${DEVLAB_ROOT}/config/modules.conf"
+    # shellcheck source=/dev/null
+    source "$modules_conf"
+
+    local installers_dir="${DEVLAB_ROOT}/installers"
+    local installed=0 skipped=0 failed=0
+
+    declare -A module_map=(
+        ["MODULE_BASE_SYSTEM_TOOLS"]="base/10-system-tools.sh"
+        ["MODULE_LANGUAGES_NODEJS"]="languages/10-nodejs.sh"
+        ["MODULE_LANGUAGES_PYTHON"]="languages/20-python.sh"
+        ["MODULE_LANGUAGES_PHP"]="languages/30-php.sh"
+        ["MODULE_LANGUAGES_GOLANG"]="languages/40-golang.sh"
+        ["MODULE_LANGUAGES_RUST"]="languages/50-rust.sh"
+        ["MODULE_CONTAINERS_DOCKER"]="containers/10-docker.sh"
+        ["MODULE_CONTAINERS_COMPOSE"]="containers/20-compose.sh"
+        ["MODULE_DATABASES_POSTGRESQL"]="databases/10-postgresql.sh"
+        ["MODULE_DATABASES_MARIADB"]="databases/20-mariadb.sh"
+        ["MODULE_DATABASES_REDIS"]="databases/30-redis.sh"
+        ["MODULE_WEB_NGINX"]="web/10-nginx.sh"
+        ["MODULE_AI_CLAUDE_CODE"]="ai/10-claude-code.sh"
+        ["MODULE_AI_OPENAI_CODEX"]="ai/20-openai-codex.sh"
+        ["MODULE_DEVTOOLS_ZSH"]="devtools/10-zsh.sh"
+        ["MODULE_DEVTOOLS_TMUX"]="devtools/20-tmux.sh"
+        ["MODULE_DEVTOOLS_FZF"]="devtools/30-fzf.sh"
+        ["MODULE_DEVTOOLS_MODERN_CLI"]="devtools/40-modern-cli.sh"
+        ["MODULE_DEVTOOLS_CODE_SERVER"]="devtools/50-code-server.sh"
+        ["MODULE_TESTING_PLAYWRIGHT"]="testing/10-playwright.sh"
+        ["MODULE_TESTING_VITEST_JEST"]="testing/20-vitest-jest.sh"
+        ["MODULE_TESTING_PYTEST"]="testing/30-pytest.sh"
+        ["MODULE_TESTING_PHPUNIT"]="testing/40-phpunit.sh"
+    )
+
+    for module_flag in "${!module_map[@]}"; do
+        local enabled="${!module_flag:-false}"
+        local script_rel="${module_map[$module_flag]}"
+        local script_path="${installers_dir}/${script_rel}"
+
+        if [[ "$enabled" != "true" ]]; then
+            log_debug "Module désactivé : ${module_flag}"
+            (( skipped++ )) || true
+            continue
+        fi
+
+        if [[ ! -f "$script_path" ]]; then
+            log_warn "Installeur manquant : ${script_rel}"
+            (( failed++ )) || true
+            continue
+        fi
+
+        if bash "$script_path"; then
+            (( installed++ )) || true
+        else
+            log_error "Échec : ${script_rel}"
+            (( failed++ )) || true
+        fi
+    done
+
+    echo
+    log_section "Résumé d'installation"
+    printf "  ${C_GREEN}Installés${C_RESET}  : %d\n" "$installed"
+    printf "  ${C_CYAN}Ignorés${C_RESET}    : %d\n" "$skipped"
+    [[ "$failed" -gt 0 ]] && printf "  ${C_RED}Échoués${C_RESET}    : %d\n" "$failed"
+}
+
+_install_module() {
+    local module="$1"
+    # Normalise le chemin du module
+    local script_path="${DEVLAB_ROOT}/installers/${module}"
+
+    # Accepte aussi le format sans extension
+    [[ -f "${script_path}.sh" ]] && script_path="${script_path}.sh"
+
+    if [[ ! -f "$script_path" ]]; then
+        # Recherche partielle
+        local found; found=$(find "${DEVLAB_ROOT}/installers" -name "*${module}*" -name "*.sh" 2>/dev/null | head -1)
+        if [[ -n "$found" ]]; then
+            script_path="$found"
+        else
+            log_fatal "Module introuvable : ${module}"
+        fi
+    fi
+
+    log_info "Exécution : ${script_path}"
+    bash "$script_path"
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : status
+# ─────────────────────────────────────────────
+cmd_status() {
+    state_init
+    log_section "État du registre DevLab"
+
+    local registry="${DEVLAB_ROOT}/state/registry.json"
+    if [[ ! -f "$registry" ]] || ! command_exists jq; then
+        log_warn "Registre non disponible"
+        return 0
+    fi
+
+    local meta_created; meta_created=$(jq -r '._meta.created' "$registry")
+    local meta_host; meta_host=$(jq -r '._meta.host' "$registry")
+    printf "  Hôte    : %s\n" "$meta_host"
+    printf "  Créé le : %s\n\n" "$meta_created"
+
+    printf "  %-30s %-12s %-20s %s\n" "Module" "Statut" "Version" "Date"
+    printf "  %s\n" "$(printf '─%.0s' {1..75})"
+
+    while IFS=$'\t' read -r key status version installed_at; do
+        local color
+        case "$status" in
+            installed) color="$C_GREEN" ;;
+            failed)    color="$C_RED" ;;
+            skipped)   color="$C_CYAN" ;;
+            *)         color="$C_DIM" ;;
+        esac
+        printf "  %-30s ${color}%-12s${C_RESET} %-20s %s\n" "$key" "$status" "$version" "$installed_at"
+    done < <(state_list)
+    echo
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : check
+# ─────────────────────────────────────────────
+cmd_check() {
+    run_full_check
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : health
+# ─────────────────────────────────────────────
+cmd_health() {
+    log_section "Diagnostic de santé DevLab"
+    bash "${DEVLAB_ROOT}/scripts/health.sh"
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : backup
+# ─────────────────────────────────────────────
+cmd_backup() {
+    bash "${DEVLAB_ROOT}/scripts/backup.sh"
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : update
+# ─────────────────────────────────────────────
+cmd_update() {
+    bash "${DEVLAB_ROOT}/scripts/update.sh"
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : sync
+# ─────────────────────────────────────────────
+cmd_sync() {
+    bash "${DEVLAB_ROOT}/scripts/sync.sh"
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : reset
+# ─────────────────────────────────────────────
+cmd_reset() {
+    local module="${1:-}"
+    if [[ -z "$module" ]]; then
+        log_fatal "Usage : devlab reset <module_key>"
+    fi
+    if confirm "Réinitialiser ${module} dans le registre ?"; then
+        state_remove "$module"
+        log_ok "Module ${module} retiré du registre — relancez 'devlab install ${module}' pour réinstaller"
+    fi
+}
+
+# ─────────────────────────────────────────────
+# COMMANDE : list-modules
+# ─────────────────────────────────────────────
+cmd_list_modules() {
+    log_section "Modules disponibles"
+    find "${DEVLAB_ROOT}/installers" -name "*.sh" | sort | while read -r f; do
+        local rel="${f#${DEVLAB_ROOT}/installers/}"
+        local module_key="${rel%.sh}"
+        local installed=""
+        if state_is_installed "$module_key" 2>/dev/null; then
+            installed="${C_GREEN}[installé]${C_RESET}"
+        fi
+        printf "  %-40s %b\n" "$module_key" "$installed"
+    done
+    echo
+}
+
+# ─────────────────────────────────────────────
+# DISPATCHER PRINCIPAL
+# ─────────────────────────────────────────────
+main() {
+    if [[ $# -eq 0 ]]; then
+        usage
+        exit 0
+    fi
+
+    # Parse options globales avant la commande
+    local remaining
+    remaining=$(parse_global_opts "$@") || true
+    # shellcheck disable=SC2086
+    set -- $remaining
+
+    local command="${1:-help}"
+    shift || true
+
+    case "$command" in
+        bootstrap)     cmd_bootstrap "$@" ;;
+        install)       cmd_install "$@" ;;
+        status)        cmd_status ;;
+        check)         cmd_check ;;
+        health)        cmd_health ;;
+        backup)        cmd_backup ;;
+        update)        cmd_update ;;
+        sync)          cmd_sync ;;
+        reset)         cmd_reset "$@" ;;
+        list-modules)  cmd_list_modules ;;
+        help|--help|-h) usage ;;
+        *)
+            log_error "Commande inconnue : ${command}"
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
