@@ -48,6 +48,8 @@ _install_redis() {
 }
 
 _configure_redis() {
+    command_exists redis-server || { log_error "redis-server non trouvé après installation"; return 1; }
+
     local redis_conf="/etc/redis/redis.conf"
     backup_file "$redis_conf"
 

@@ -47,6 +47,8 @@ _install_nginx() {
 }
 
 _configure_nginx() {
+    command_exists nginx || { log_error "nginx non trouvé après installation"; return 1; }
+
     local nginx_conf="/etc/nginx/nginx.conf"
     local sites_available="/etc/nginx/conf.d"
 

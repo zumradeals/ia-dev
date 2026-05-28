@@ -62,6 +62,9 @@ _install_docker() {
 }
 
 _configure_docker() {
+    # Vérifier que Docker a bien été installé avant de configurer
+    command_exists docker || { log_error "Docker non trouvé après installation"; return 1; }
+
     # Configurer Docker daemon
     local daemon_conf="/etc/docker/daemon.json"
     mkdir -p /etc/docker
