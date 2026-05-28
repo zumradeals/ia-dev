@@ -24,14 +24,16 @@ _load_config() {
     local local_env="${DEVLAB_ROOT}/config/local.env"
     local secrets_env="${DEVLAB_ROOT}/config/secrets.env"
 
+    # if/fi obligatoire : avec set -e, [[ -f ]] && source retourne 1
+    # quand le fichier est absent, causant un exit silencieux de la fonction.
     # shellcheck source=/dev/null
-    [[ -f "$default_env" ]]  && source "$default_env"
+    if [[ -f "$default_env" ]];   then source "$default_env";  fi
     # shellcheck source=/dev/null
-    [[ -f "$versions_conf" ]] && source "$versions_conf"
+    if [[ -f "$versions_conf" ]]; then source "$versions_conf"; fi
     # shellcheck source=/dev/null
-    [[ -f "$local_env" ]]    && source "$local_env"
+    if [[ -f "$local_env" ]];     then source "$local_env";     fi
     # shellcheck source=/dev/null
-    [[ -f "$secrets_env" ]]  && source "$secrets_env"
+    if [[ -f "$secrets_env" ]];   then source "$secrets_env";   fi
 }
 _load_config
 
