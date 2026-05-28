@@ -101,6 +101,20 @@ if [[ -f "$ROOT_KEYS" && ! -f "$USER_KEYS" ]]; then
     log_ok "Clés SSH copiées depuis root vers ${DEVLAB_USER}"
 fi
 
+# ── Mot de passe devuser ──────────────────────
+# Définit un mot de passe si DEVLAB_USER_PASSWORD est défini dans secrets.env
+# Sinon déverrouille le compte pour permettre su depuis root sans mot de passe
+if [[ -n "${DEVLAB_USER_PASSWORD:-}" ]]; then
+    echo "${DEVLAB_USER}:${DEVLAB_USER_PASSWORD}" | chpasswd
+    log_ok "Mot de passe ${DEVLAB_USER} défini depuis DEVLAB_USER_PASSWORD"
+else
+    # Déverrouille le compte (passwd -u) sans définir de mot de passe
+    # Permet à root de faire 'su - devuser' sans saisie
+    passwd -u "$DEVLAB_USER" 2>/dev/null || true
+    log_info "Mot de passe ${DEVLAB_USER} non défini — utilisez 'passwd ${DEVLAB_USER}' pour en créer un"
+    log_info "  ou définissez DEVLAB_USER_PASSWORD dans config/secrets.env"
+fi
+
 state_set "bootstrap.users-groups" "$(date +%Y%m%d)" "installed"
 log_ok "Utilisateurs et groupes configurés"
 echo

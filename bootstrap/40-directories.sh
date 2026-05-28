@@ -32,7 +32,7 @@ declare -A DIRS=(
     ["${DEVLAB_ROOT}/backups/configs"]="${DEVLAB_USER}:700"
     ["${DEVLAB_ROOT}/backups/databases"]="${DEVLAB_USER}:700"
     ["${DEVLAB_ROOT}/state"]="${DEVLAB_USER}:700"
-    ["${DEVLAB_ROOT}/config"]="root:750"
+    ["${DEVLAB_ROOT}/config"]="root:775"
 )
 
 for dir in "${!DIRS[@]}"; do
