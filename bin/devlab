@@ -218,8 +218,11 @@ _install_module() {
     [[ -f "${script_path}.sh" ]] && script_path="${script_path}.sh"
 
     if [[ ! -f "$script_path" ]]; then
-        # Recherche partielle
-        local found; found=$(find "${DEVLAB_ROOT}/installers" -name "*${module}*" -name "*.sh" 2>/dev/null | head -1)
+        # Recherche partielle dans le bon sous-répertoire (basename pour éviter le slash)
+        local module_dir; module_dir=$(dirname "$module")
+        local module_base; module_base=$(basename "$module")
+        local search_dir="${DEVLAB_ROOT}/installers/${module_dir}"
+        local found; found=$(find "$search_dir" -maxdepth 1 -name "*${module_base}*" -name "*.sh" 2>/dev/null | sort | head -1)
         if [[ -n "$found" ]]; then
             script_path="$found"
         else
