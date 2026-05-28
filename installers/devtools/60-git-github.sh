@@ -97,6 +97,7 @@ _configure_git_globals() {
 _setup_ssh_key() {
     mkdir -p "${USER_HOME}/.ssh"
     chmod 700 "${USER_HOME}/.ssh"
+    local user_group; user_group=$(id -gn "$DEVLAB_USER" 2>/dev/null || echo "$DEVLAB_USER")
 
     if [[ -f "$SSH_KEY" ]]; then
         log_skip "Clé SSH déjà présente : ${SSH_KEY}"
@@ -110,7 +111,7 @@ _setup_ssh_key() {
             -N ""
         chmod 600 "${SSH_KEY}"
         chmod 644 "${SSH_KEY}.pub"
-        chown "${DEVLAB_USER}:${DEVLAB_USER}" "${SSH_KEY}" "${SSH_KEY}.pub"
+        chown "${DEVLAB_USER}:${user_group}" "${SSH_KEY}" "${SSH_KEY}.pub"
         log_ok "Clé SSH générée : ${SSH_KEY}"
     fi
 
@@ -126,7 +127,7 @@ Host github.com
   ServerAliveInterval 60
 EOF
         chmod 600 "$SSH_CONFIG"
-        chown "${DEVLAB_USER}:${DEVLAB_USER}" "$SSH_CONFIG"
+        chown "${DEVLAB_USER}:${user_group}" "$SSH_CONFIG"
         log_step "~/.ssh/config configuré pour github.com"
     else
         log_skip "~/.ssh/config : entrée github.com déjà présente"
