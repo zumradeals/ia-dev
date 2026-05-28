@@ -7,7 +7,9 @@ set -euo pipefail
 # ─────────────────────────────────────────────
 # BOOTSTRAP INTERNE
 # ─────────────────────────────────────────────
-DEVLAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+DEVLAB_ROOT="$(cd "$(dirname "${_REAL}")/.." && pwd)"
+unset _REAL
 export DEVLAB_ROOT
 
 # shellcheck source=../lib/core.sh

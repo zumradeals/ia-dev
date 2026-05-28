@@ -9,7 +9,9 @@ set -euo pipefail
 # DEVLAB_ROOT — détection automatique
 # ─────────────────────────────────────────────
 if [[ -z "${DEVLAB_ROOT:-}" ]]; then
-    DEVLAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    _core_real="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+    DEVLAB_ROOT="$(cd "$(dirname "${_core_real}")/.." && pwd)"
+    unset _core_real
 fi
 export DEVLAB_ROOT
 
