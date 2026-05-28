@@ -51,19 +51,13 @@ _configure_redis() {
     local redis_conf="/etc/redis/redis.conf"
     backup_file "$redis_conf"
 
-    local template="${DEVLAB_ROOT}/configs/redis/redis.conf.tpl"
-    if [[ -f "$template" ]]; then
-        render_template "$template" "$redis_conf"
-    else
-        # Hardening inline minimal
-        sed -i "s/^bind .*/bind ${REDIS_BIND}/" "$redis_conf"
-        sed -i "s/^port .*/port ${REDIS_PORT}/" "$redis_conf"
-        # Désactiver les commandes dangereuses
-        grep -qE "^rename-command FLUSHALL" "$redis_conf" || \
-            echo "rename-command FLUSHALL \"\"" >> "$redis_conf"
-        grep -qE "^rename-command CONFIG" "$redis_conf" || \
-            echo "rename-command CONFIG DEVLAB_REDIS_CONFIG" >> "$redis_conf"
-    fi
+    # Modifier uniquement les directives nécessaires — préserver la config du paquet
+    sed -i "s/^bind .*/bind ${REDIS_BIND}/" "$redis_conf"
+    sed -i "s/^port .*/port ${REDIS_PORT}/" "$redis_conf"
+
+    # Sécurité : désactiver les commandes dangereuses si pas déjà fait
+    grep -qE "^rename-command FLUSHALL" "$redis_conf" || \
+        printf '\nrename-command FLUSHALL ""\nrename-command FLUSHDB ""\nrename-command DEBUG ""\n' >> "$redis_conf"
 
     systemctl enable redis-server --quiet
     systemctl restart redis-server
