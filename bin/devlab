@@ -74,8 +74,8 @@ ${C_BOLD}Modules disponibles :${C_RESET}
   devtools/tmux              ai/openai-codex
   devtools/fzf               testing/playwright
   devtools/modern-cli        testing/vitest-jest
-  devtools/code-server        testing/pytest
-                             testing/phpunit
+  devtools/git-github        testing/pytest
+  devtools/code-server       testing/phpunit
 
 EOF
 }
@@ -166,6 +166,7 @@ _install_all_enabled() {
         "MODULE_DEVTOOLS_TMUX:devtools/20-tmux.sh"
         "MODULE_DEVTOOLS_FZF:devtools/30-fzf.sh"
         "MODULE_DEVTOOLS_MODERN_CLI:devtools/40-modern-cli.sh"
+        "MODULE_DEVTOOLS_GIT_GITHUB:devtools/60-git-github.sh"
         "MODULE_DEVTOOLS_CODE_SERVER:devtools/50-code-server.sh"
         "MODULE_AI_CLAUDE_CODE:ai/10-claude-code.sh"
         "MODULE_AI_OPENAI_CODEX:ai/20-openai-codex.sh"
