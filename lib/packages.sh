@@ -5,6 +5,12 @@
 # ─────────────────────────────────────────────
 # APT
 # ─────────────────────────────────────────────
+
+# Défini ici pour que packages.sh soit autonome sans dépendance à checks.sh
+check_apt_package() {
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+}
+
 apt_update() {
     log_step "Mise à jour de l'index APT"
     DEBIAN_FRONTEND=noninteractive apt-get update -qq
