@@ -62,16 +62,16 @@ log_info "Initialisation du registre d'état..."
 STATE_FILE="${DEVLAB_ROOT}/state/registry.json"
 
 if [[ ! -f "$STATE_FILE" || "$(jq '._meta.created' "$STATE_FILE" 2>/dev/null)" == '""' ]]; then
-    local ts; ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    local host; host=$(hostname -f 2>/dev/null || hostname)
+    _ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    _host=$(hostname -f 2>/dev/null || hostname)
     cat > "$STATE_FILE" << REGISTRY
 {
   "_meta": {
     "version": "1.0",
-    "created": "${ts}",
-    "updated": "${ts}",
+    "created": "${_ts}",
+    "updated": "${_ts}",
     "devlab_version": "1.0.0",
-    "host": "${host}"
+    "host": "${_host}"
   },
   "modules": {}
 }

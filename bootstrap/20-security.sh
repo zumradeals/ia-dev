@@ -120,5 +120,6 @@ fi
 state_set "bootstrap.security" "$(date +%Y%m%d)" "installed"
 log_ok "Configuration sécurité terminée"
 echo
-log_warn "ATTENTION : PasswordAuthentication=no — assurez-vous d'avoir une clé SSH configurée !"
-log_info "Pour autoriser l'accès par clé : cat ~/.ssh/id_rsa.pub >> /home/${DEVLAB_USER:-devuser}/.ssh/authorized_keys"
+log_info "Pour durcir SSH (désactiver le mot de passe), configurez dans config/local.env :"
+log_info "  SSH_PASSWORD_AUTH=no  # requiert une clé dans ~/.ssh/authorized_keys"
+log_info "  SSH_PERMIT_ROOT=no    # recommandé si vous utilisez devuser"
