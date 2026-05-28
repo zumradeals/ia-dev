@@ -7,7 +7,11 @@ set -euo pipefail
 # ─────────────────────────────────────────────
 # BOOTSTRAP INTERNE
 # ─────────────────────────────────────────────
-DEVLAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# readlink -f résout le lien symbolique vers le fichier réel
+# sans ça, dirname donne /usr/local/bin au lieu de /devlab-bootstrap/bin
+_REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+DEVLAB_ROOT="$(cd "$(dirname "${_REAL_SCRIPT}")/.." && pwd)"
+unset _REAL_SCRIPT
 export DEVLAB_ROOT
 
 # shellcheck source=../lib/core.sh
