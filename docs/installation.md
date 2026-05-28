@@ -11,11 +11,12 @@
 ## Étape 1 — Cloner le dépôt
 
 ```bash
-git clone <votre-repo> /opt/devlab-bootstrap
-cd /opt/devlab-bootstrap
+# Cloner où vous voulez — DEVLAB_ROOT est auto-détecté
+git clone https://github.com/zumradeals/ia-dev.git /devlab-bootstrap
+cd /devlab-bootstrap
 ```
 
-## Étape 2 — Configurer
+## Étape 2 — Configurer (optionnel, avant bootstrap)
 
 ```bash
 # Configuration locale (gitignored)
@@ -38,11 +39,18 @@ chmod 600 config/secrets.env
 ## Étape 3 — Bootstrap système
 
 ```bash
-# Vérifications pré-requises (non destructif)
-sudo bash bootstrap/00-preflight.sh
+# setup.sh est le point d'entrée unique pour le premier lancement :
+# - Détecte DEVLAB_ROOT automatiquement
+# - Crée /usr/local/bin/devlab (symlink)
+# - Lance le bootstrap complet
+sudo bash setup.sh
+```
 
-# Bootstrap complet (crée devuser, configure sécurité, arborescence)
-sudo devlab bootstrap
+Après `setup.sh`, la commande `devlab` est disponible partout.
+
+Optionnel — vérifications seules avant bootstrap :
+```bash
+sudo bash bootstrap/00-preflight.sh
 ```
 
 ## Étape 4 — Installer les modules

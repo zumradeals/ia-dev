@@ -14,22 +14,27 @@ DevLab n'est pas un script d'installation — c'est un **firmware de laboratoire
 ## Démarrage rapide
 
 ```bash
-# Cloner le dépôt
-git clone <votre-repo> /devlab-bootstrap
+# 1. Cloner le dépôt (n'importe où sur le serveur)
+git clone https://github.com/zumradeals/ia-dev.git /devlab-bootstrap
 cd /devlab-bootstrap
 
-# Bootstrap initial (root requis, une seule fois)
-sudo bash bootstrap/00-preflight.sh    # Vérifications
-sudo devlab bootstrap                   # Bootstrap complet
+# 2. Premier lancement : setup.sh configure le PATH et lance le bootstrap
+#    (setup.sh détecte automatiquement DEVLAB_ROOT depuis son emplacement)
+sudo bash setup.sh
 
-# Installation des modules
+# Après le bootstrap, devlab est disponible dans le PATH
+# 3. Installer les modules (depuis n'importe quel répertoire)
 devlab install all                      # Tous les modules activés
 devlab install languages/nodejs         # Module spécifique
 
-# Statut
+# 4. Vérifier
 devlab status
 devlab health
 ```
+
+> **Note** : `sudo bash setup.sh` est la **seule commande root** nécessaire au premier lancement.
+> Elle crée `/usr/local/bin/devlab` et configure `DEVLAB_ROOT` automatiquement.
+> Ensuite, tout s'utilise via `devlab <commande>` sans chemin explicite.
 
 ## Structure
 
