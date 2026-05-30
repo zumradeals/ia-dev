@@ -76,6 +76,7 @@ ${C_BOLD}Modules disponibles :${C_RESET}
   devtools/modern-cli        testing/vitest-jest
   devtools/git-github        testing/pytest
   devtools/code-server       testing/phpunit
+  web/gamadcode-ui           (interface admin — port 3000)
 
 EOF
 }
@@ -162,6 +163,7 @@ _install_all_enabled() {
         "MODULE_DATABASES_MARIADB:databases/20-mariadb.sh"
         "MODULE_DATABASES_REDIS:databases/30-redis.sh"
         "MODULE_WEB_NGINX:web/10-nginx.sh"
+        "MODULE_WEB_GAMADCODE_UI:web/20-gamadcode-ui.sh"
         "MODULE_DEVTOOLS_ZSH:devtools/10-zsh.sh"
         "MODULE_DEVTOOLS_TMUX:devtools/20-tmux.sh"
         "MODULE_DEVTOOLS_FZF:devtools/30-fzf.sh"

@@ -90,14 +90,40 @@ EOF
         cat > /var/www/html/index.html << 'HTML'
 <!DOCTYPE html>
 <html lang="fr">
-<head><meta charset="UTF-8"><title>DevLab AI</title>
-<style>body{font-family:monospace;background:#0d1117;color:#c9d1d9;padding:40px}
-h1{color:#58a6ff}code{color:#7ee787}</style></head>
+<head>
+<meta charset="UTF-8">
+<title>DevLab AI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: monospace; background: #0d1117; color: #c9d1d9; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .card { text-align: center; padding: 60px 40px; }
+  h1 { color: #58a6ff; font-size: 2rem; margin-bottom: 8px; letter-spacing: 2px; }
+  .subtitle { color: #8b949e; margin-bottom: 48px; font-size: 0.9rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: #238636; color: #fff; text-decoration: none;
+    padding: 16px 36px; border-radius: 8px; font-size: 1rem;
+    font-family: monospace; font-weight: bold; letter-spacing: 1px;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #2ea043; }
+  .btn svg { width: 20px; height: 20px; fill: currentColor; }
+  .footer { margin-top: 40px; color: #484f58; font-size: 0.75rem; }
+  code { color: #7ee787; }
+</style>
+</head>
 <body>
-<h1>DevLab AI Laboratory</h1>
-<p>Laboratoire de développement IA opérationnel.</p>
-<code>devlab status</code> — pour voir l'état des modules
-</body></html>
+<div class="card">
+  <h1>DevLab AI</h1>
+  <p class="subtitle">Laboratoire de développement IA opérationnel</p>
+  <a class="btn" href="/code/" target="_blank">
+    <svg viewBox="0 0 24 24"><path d="M13.5 2C13.5 2 13.5 2 13.5 2C8 2 3.5 6.5 3.5 12C3.5 17.5 8 22 13.5 22C19 22 23.5 17.5 23.5 12C23.5 6.5 19 2 13.5 2ZM13.5 20C9.1 20 5.5 16.4 5.5 12C5.5 7.6 9.1 4 13.5 4C17.9 4 21.5 7.6 21.5 12C21.5 16.4 17.9 20 13.5 20ZM12 7L17 12L12 17L10.6 15.6L13.2 13H7V11H13.2L10.6 8.4L12 7Z"/></svg>
+    Ouvrir VS Code
+  </a>
+  <p class="footer"><code>devlab status</code> — état des modules</p>
+</div>
+</body>
+</html>
 HTML
     fi
 

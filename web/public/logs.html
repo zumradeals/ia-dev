@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logs — GamadCode</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  .log-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .log-file-name { font-size: 12px; color: var(--muted); flex: 1; font-family: monospace; }
+  #log-box { height: calc(100vh - 220px); min-height: 400px; }
+  .ws-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .ws-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Logs live</h1>
+        <div class="breadcrumb">Suivi en temps réel des opérations DevLab</div>
+      </div>
+      <span class="ws-badge"><span class="ws-dot" id="ws-dot"></span><span id="ws-status">Déconnecté</span></span>
+    </div>
+    <div class="content">
+
+      <div class="log-toolbar">
+        <span class="log-file-name" id="log-file">—</span>
+        <button class="btn btn-secondary btn-sm" id="clear-btn">✕ Effacer</button>
+        <button class="btn btn-secondary btn-sm" id="scroll-btn">⬇ Bas</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="autoscroll" checked style="cursor:pointer"> Auto-scroll
+        </label>
+      </div>
+
+      <div class="log-container" id="log-box"></div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+<script>
+(async () => {
+    const me = await loadUser(u => { window._user = u; renderSidebar('logs'); });
+    if (!me?.authenticated && document.location.pathname !== '/') window.location.href = '/';
+
+    const logBox      = document.getElementById('log-box');
+    const wsDot       = document.getElementById('ws-dot');
+    const wsStatus    = document.getElementById('ws-status');
+    const logFileEl   = document.getElementById('log-file');
+    const autoscroll  = document.getElementById('autoscroll');
+
+    const COLOR_MAP = { ok: 'ok', error: 'error', warn: 'warn', info: 'info', step: 'step', section: 'section' };
+
+    function classifyLine(line) {
+        if (/\[OK\]|\[DONE\]|✓/.test(line))      return 'ok';
+        if (/\[ERROR\]|\[FATAL\]|✗/.test(line))  return 'error';
+        if (/\[WARN\]/.test(line))                return 'warn';
+        if (/\[INFO\]/.test(line))                return 'info';
+        if (/^={3,}|^─{3,}/.test(line))          return 'section';
+        return 'step';
+    }
+
+    function appendLine(text) {
+        const lines = text.split('\n');
+        for (const raw of lines) {
+            const line = raw.replace(/\x1B\[[0-9;]*[mGKH]/g, ''); // strip ANSI
+            if (!line.trim()) continue;
+            const div = document.createElement('div');
+            div.className = 'log-line ' + classifyLine(line);
+            div.textContent = line;
+            logBox.appendChild(div);
+        }
+        if (autoscroll.checked) logBox.scrollTop = logBox.scrollHeight;
+        // keep max 2000 lines
+        while (logBox.children.length > 2000) logBox.removeChild(logBox.firstChild);
+    }
+
+    function connect() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const ws = new WebSocket(`${proto}://${location.host}/ws/logs`);
+
+        ws.addEventListener('open', () => {
+            wsDot.classList.add('connected');
+            wsStatus.textContent = 'Connecté';
+        });
+
+        ws.addEventListener('message', e => {
+            const data = JSON.parse(e.data);
+            if (data.file)  { logFileEl.textContent = data.file; return; }
+            if (data.line)  { appendLine(data.line); }
+        });
+
+        ws.addEventListener('close', () => {
+            wsDot.classList.remove('connected');
+            wsStatus.textContent = 'Reconnexion…';
+            setTimeout(connect, 3000);
+        });
+
+        ws.addEventListener('error', () => ws.close());
+    }
+
+    connect();
+
+    document.getElementById('clear-btn').addEventListener('click', () => { logBox.innerHTML = ''; });
+    document.getElementById('scroll-btn').addEventListener('click', () => { logBox.scrollTop = logBox.scrollHeight; });
+})();
+</script>
+</body>
+</html>
