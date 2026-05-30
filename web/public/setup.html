@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration — GamadCode</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; min-height: 100vh; }
+  .setup-header { text-align: center; margin-bottom: 40px; }
+  .setup-header h1 { color: var(--accent); font-size: 1.8rem; letter-spacing: 1px; margin-bottom: 6px; }
+  .setup-header p  { color: var(--muted); font-size: 13px; }
+  .step-content h2 { font-size: 1.1rem; margin-bottom: 6px; }
+  .step-content p  { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .module-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .module-check {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; background: var(--bg3);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; font-size: 13px; transition: border-color .15s;
+  }
+  .module-check:hover { border-color: var(--accent); }
+  .module-check input { cursor: pointer; accent-color: var(--accent); }
+  .module-icon-sm { font-size: 18px; }
+  .summary-list { list-style: none; padding: 0; }
+  .summary-list li { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px; }
+  .summary-list li:last-child { border: none; }
+  .summary-list li span { color: var(--muted); }
+  .install-log { display: none; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="wizard" style="width:100%;max-width:640px">
+
+  <div class="setup-header">
+    <h1>GamadCode</h1>
+    <p>Configuration initiale du laboratoire IA</p>
+  </div>
+
+  <!-- Steps indicator -->
+  <div class="wizard-steps" id="steps-indicator">
+    <div class="step-item active" data-step="1">
+      <div class="step-num">1</div>
+      <div class="step-label">Serveur</div>
+    </div>
+    <div class="step-item" data-step="2">
+      <div class="step-num">2</div>
+      <div class="step-label">Modules</div>
+    </div>
+    <div class="step-item" data-step="3">
+      <div class="step-num">3</div>
+      <div class="step-label">GitHub</div>
+    </div>
+    <div class="step-item" data-step="4">
+      <div class="step-num">4</div>
+      <div class="step-label">Résumé</div>
+    </div>
+  </div>
+
+  <!-- Step 1 — Serveur -->
+  <div class="step-panel card active" id="step-1">
+    <div class="step-content">
+      <h2>Informations serveur</h2>
+      <p>Ces informations apparaîtront dans l'interface et les configurations Nginx.</p>
+      <div class="form-group">
+        <label class="form-label">Domaine principal <span style="color:var(--muted)">(ex: gamad.net)</span></label>
+        <input class="form-input" id="f-domain" type="text" placeholder="votre-domaine.com">
+        <div class="form-hint">Laisser vide pour utiliser l'adresse IP uniquement.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nom du projet</label>
+        <input class="form-input" id="f-project" type="text" value="GamadCode" placeholder="GamadCode">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Port VS Code (code-server)</label>
+        <input class="form-input" id="f-vscode-port" type="number" value="8080" min="1024" max="65535">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Port interface GamadCode</label>
+        <input class="form-input" id="f-ui-port" type="number" value="3000" min="1024" max="65535">
+      </div>
+    </div>
+    <div class="wizard-nav">
+      <span></span>
+      <button class="btn btn-primary" onclick="goStep(2)">Suivant →</button>
+    </div>
+  </div>
+
+  <!-- Step 2 — Modules -->
+  <div class="step-panel card" id="step-2">
+    <div class="step-content">
+      <h2>Sélection des modules</h2>
+      <p>Choisissez les outils à installer sur votre serveur.</p>
+      <div class="module-grid">
+        <label class="module-check"><input type="checkbox" name="mod" value="base/system-tools" checked><span class="module-icon-sm">🛠</span> System Tools</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="languages/nodejs" checked><span class="module-icon-sm">⬡</span> Node.js</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="languages/python" checked><span class="module-icon-sm">🐍</span> Python</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="languages/php"><span class="module-icon-sm">🐘</span> PHP</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="languages/golang"><span class="module-icon-sm">🔵</span> Go</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="containers/docker" checked><span class="module-icon-sm">🐳</span> Docker</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="containers/compose" checked><span class="module-icon-sm">📦</span> Compose</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="databases/postgresql" checked><span class="module-icon-sm">🐘</span> PostgreSQL</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="databases/redis" checked><span class="module-icon-sm">🔴</span> Redis</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="web/nginx" checked><span class="module-icon-sm">🌐</span> Nginx</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="ai/claude-code" checked><span class="module-icon-sm">🤖</span> Claude Code</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="devtools/zsh" checked><span class="module-icon-sm">🐚</span> Zsh</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="devtools/code-server" checked><span class="module-icon-sm">💻</span> VS Code (browser)</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="devtools/git-github" checked><span class="module-icon-sm">🐙</span> Git + GitHub</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="devtools/modern-cli" checked><span class="module-icon-sm">⚡</span> Modern CLI</label>
+        <label class="module-check"><input type="checkbox" name="mod" value="testing/pytest"><span class="module-icon-sm">🧪</span> Pytest</label>
+      </div>
+    </div>
+    <div class="wizard-nav">
+      <button class="btn btn-secondary" onclick="goStep(1)">← Retour</button>
+      <button class="btn btn-primary" onclick="goStep(3)">Suivant →</button>
+    </div>
+  </div>
+
+  <!-- Step 3 — GitHub OAuth -->
+  <div class="step-panel card" id="step-3">
+    <div class="step-content">
+      <h2>GitHub OAuth <span style="color:var(--muted);font-size:12px;font-weight:400">(optionnel)</span></h2>
+      <p>Permet la connexion via GitHub. Créez une OAuth App sur <a href="https://github.com/settings/developers" target="_blank">github.com/settings/developers</a>.</p>
+      <div class="alert alert-info" style="margin-bottom:20px">
+        <span>Sans OAuth configuré, l'interface est accessible sans connexion (accès local seulement recommandé).</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">GitHub Client ID</label>
+        <input class="form-input" id="f-gh-id" type="text" placeholder="Ghp_XXXXXXXXXXXX">
+      </div>
+      <div class="form-group">
+        <label class="form-label">GitHub Client Secret</label>
+        <input class="form-input" id="f-gh-secret" type="password" placeholder="••••••••••••••••••••">
+        <div class="form-hint">Stocké dans <code>config/secrets.env</code> (chmod 600, non versionné).</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Login GitHub admin <span style="color:var(--muted)">(votre @handle)</span></label>
+        <input class="form-input" id="f-gh-admin" type="text" placeholder="votre-login-github">
+        <div class="form-hint">Seul cet utilisateur aura accès aux actions d'administration.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Callback URL</label>
+        <input class="form-input" id="f-gh-callback" type="text" placeholder="https://code.gamad.net/auth/github/callback">
+        <div class="form-hint">Doit correspondre à l'URL configurée dans votre OAuth App GitHub.</div>
+      </div>
+    </div>
+    <div class="wizard-nav">
+      <button class="btn btn-secondary" onclick="goStep(2)">← Retour</button>
+      <button class="btn btn-primary" onclick="goStep(4)">Suivant →</button>
+    </div>
+  </div>
+
+  <!-- Step 4 — Summary & Install -->
+  <div class="step-panel card" id="step-4">
+    <div class="step-content">
+      <h2>Résumé et lancement</h2>
+      <p>Vérifiez la configuration avant de démarrer l'installation.</p>
+      <ul class="summary-list" id="summary-list"></ul>
+    </div>
+    <div class="install-log" id="install-log">
+      <div class="log-container" id="install-output" style="height:320px"></div>
+    </div>
+    <div class="wizard-nav" id="install-nav">
+      <button class="btn btn-secondary" onclick="goStep(3)">← Retour</button>
+      <button class="btn btn-primary" id="install-btn" onclick="startInstall()">🚀 Lancer l'installation</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentStep = 1;
+const TOTAL = 4;
+
+function goStep(n) {
+    document.getElementById('step-' + currentStep).classList.remove('active');
+    document.querySelectorAll('.step-item').forEach(el => {
+        const s = parseInt(el.dataset.step);
+        el.classList.remove('active', 'done');
+        if (s < n)      el.classList.add('done');
+        else if (s === n) el.classList.add('active');
+    });
+    currentStep = n;
+    document.getElementById('step-' + n).classList.add('active');
+    if (n === 4) buildSummary();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function buildSummary() {
+    const domain    = document.getElementById('f-domain').value    || '(IP directe)';
+    const project   = document.getElementById('f-project').value   || 'GamadCode';
+    const vscPort   = document.getElementById('f-vscode-port').value || '8080';
+    const uiPort    = document.getElementById('f-ui-port').value   || '3000';
+    const mods      = [...document.querySelectorAll('input[name=mod]:checked')].map(i => i.value);
+    const ghId      = document.getElementById('f-gh-id').value;
+    const ghAdmin   = document.getElementById('f-gh-admin').value;
+
+    document.getElementById('summary-list').innerHTML = `
+        <li><strong>Domaine</strong><span>${domain}</span></li>
+        <li><strong>Projet</strong><span>${project}</span></li>
+        <li><strong>VS Code port</strong><span>${vscPort}</span></li>
+        <li><strong>UI port</strong><span>${uiPort}</span></li>
+        <li><strong>Modules</strong><span>${mods.length} sélectionnés</span></li>
+        <li><strong>GitHub OAuth</strong><span>${ghId ? '✅ configuré (admin: @' + ghAdmin + ')' : '⚪ non configuré'}</span></li>
+    `;
+}
+
+async function startInstall() {
+    const btn = document.getElementById('install-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Installation en cours…';
+
+    document.getElementById('install-log').style.display = 'block';
+    const out = document.getElementById('install-output');
+
+    const append = (text, cls = '') => {
+        const lines = text.split('\n');
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            const d = document.createElement('div');
+            d.className = 'log-line ' + cls;
+            d.textContent = line;
+            out.appendChild(d);
+        }
+        out.scrollTop = out.scrollHeight;
+    };
+
+    // Write local.env
+    const domain  = document.getElementById('f-domain').value;
+    const project = document.getElementById('f-project').value || 'GamadCode';
+    const uiPort  = document.getElementById('f-ui-port').value || '3000';
+    const vscPort = document.getElementById('f-vscode-port').value || '8080';
+    const ghId     = document.getElementById('f-gh-id').value;
+    const ghSecret = document.getElementById('f-gh-secret').value;
+    const ghAdmin  = document.getElementById('f-gh-admin').value;
+    const ghCb     = document.getElementById('f-gh-callback').value;
+
+    append('Enregistrement de la configuration…', 'info');
+
+    try {
+        await fetch('/api/setup/write-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, project, uiPort, vscPort, ghId, ghSecret, ghAdmin, ghCb })
+        });
+        append('✓ config/local.env écrit', 'ok');
+    } catch(e) {
+        append('⚠ Impossible d\'écrire la config : ' + e.message, 'warn');
+    }
+
+    // Run bootstrap
+    append('\nLancement du bootstrap système…', 'section');
+    try {
+        const r = await fetch('/api/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'devlab', args: ['bootstrap'] })
+        }).then(r => r.json());
+        append(r.output);
+        append(r.code === 0 ? '\n✅ Bootstrap terminé.' : '\n⚠ Bootstrap partiel (code ' + r.code + ')', r.code === 0 ? 'ok' : 'warn');
+    } catch(e) {
+        append('Erreur bootstrap : ' + e.message, 'error');
+    }
+
+    // Install selected modules
+    const mods = [...document.querySelectorAll('input[name=mod]:checked')].map(i => i.value);
+    for (const mod of mods) {
+        append('\n⬇ Installation : ' + mod, 'info');
+        try {
+            const r = await fetch('/api/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: 'devlab', args: ['install', mod] })
+            }).then(r => r.json());
+            append(r.output);
+        } catch(e) {
+            append('Erreur : ' + e.message, 'error');
+        }
+    }
+
+    append('\n🎉 Installation terminée ! Redirection vers le dashboard…', 'ok');
+    document.getElementById('install-nav').innerHTML = `<a href="/dashboard" class="btn btn-primary">Accéder au Dashboard →</a>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modules — GamadCode</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  .module-row { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); gap: 12px; }
+  .module-row:last-child { border-bottom: none; }
+  .module-row:hover { background: var(--bg3); }
+  .module-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--bg3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+  .module-info { flex: 1; min-width: 0; }
+  .module-name { font-weight: 600; font-size: 13px; }
+  .module-key  { font-size: 11px; color: var(--muted); font-family: monospace; }
+  .module-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .run-output { margin-top: 16px; display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Modules</h1>
+        <div class="breadcrumb">État et gestion des modules installés</div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="install-all-btn">⬇ Installer tous</button>
+    </div>
+    <div class="content">
+
+      <div id="alert-area"></div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div style="padding:4px 0 12px;color:var(--muted);font-size:12px">
+          Les modules marqués <strong style="color:var(--text)">installé</strong> sont opérationnels.
+          Cliquez sur <strong style="color:var(--text)">Installer</strong> pour ajouter un module manquant.
+        </div>
+        <div id="modules-list">
+          <div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+        </div>
+      </div>
+
+      <div class="run-output card" id="run-output">
+        <div class="card-header">
+          <span class="card-title">Sortie commande</span>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('run-output').style.display='none'">✕</button>
+        </div>
+        <div class="log-container" id="run-log"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+<script>
+const LABELS = {
+    BASE_SYSTEM_TOOLS:       { name: 'System Tools', icon: '🛠', path: 'base/system-tools' },
+    LANGUAGES_NODEJS:        { name: 'Node.js',       icon: '⬡', path: 'languages/nodejs' },
+    LANGUAGES_PYTHON:        { name: 'Python',        icon: '🐍', path: 'languages/python' },
+    LANGUAGES_PHP:           { name: 'PHP',           icon: '🐘', path: 'languages/php' },
+    LANGUAGES_GOLANG:        { name: 'Go',            icon: '🔵', path: 'languages/golang' },
+    LANGUAGES_RUST:          { name: 'Rust',          icon: '⚙', path: 'languages/rust' },
+    CONTAINERS_DOCKER:       { name: 'Docker',        icon: '🐳', path: 'containers/docker' },
+    CONTAINERS_COMPOSE:      { name: 'Docker Compose',icon: '📦', path: 'containers/compose' },
+    DATABASES_POSTGRESQL:    { name: 'PostgreSQL',    icon: '🐘', path: 'databases/postgresql' },
+    DATABASES_MARIADB:       { name: 'MariaDB',       icon: '🗄', path: 'databases/mariadb' },
+    DATABASES_REDIS:         { name: 'Redis',         icon: '🔴', path: 'databases/redis' },
+    WEB_NGINX:               { name: 'Nginx',         icon: '🌐', path: 'web/nginx' },
+    AI_CLAUDE_CODE:          { name: 'Claude Code',   icon: '🤖', path: 'ai/claude-code' },
+    AI_OPENAI_CODEX:         { name: 'OpenAI Codex',  icon: '✨', path: 'ai/openai-codex' },
+    DEVTOOLS_ZSH:            { name: 'Zsh + Oh My Zsh',icon: '🐚', path: 'devtools/zsh' },
+    DEVTOOLS_TMUX:           { name: 'Tmux',          icon: '⬜', path: 'devtools/tmux' },
+    DEVTOOLS_FZF:            { name: 'FZF',           icon: '🔍', path: 'devtools/fzf' },
+    DEVTOOLS_MODERN_CLI:     { name: 'Modern CLI',    icon: '⚡', path: 'devtools/modern-cli' },
+    DEVTOOLS_GIT_GITHUB:     { name: 'Git + GitHub',  icon: '🐙', path: 'devtools/git-github' },
+    DEVTOOLS_CODE_SERVER:    { name: 'VS Code (browser)',icon:'💻', path: 'devtools/code-server' },
+    TESTING_PLAYWRIGHT:      { name: 'Playwright',    icon: '🎭', path: 'testing/playwright' },
+    TESTING_VITEST_JEST:     { name: 'Vitest / Jest', icon: '✅', path: 'testing/vitest-jest' },
+    TESTING_PYTEST:          { name: 'Pytest',        icon: '🧪', path: 'testing/pytest' },
+    TESTING_PHPUNIT:         { name: 'PHPUnit',       icon: '🧩', path: 'testing/phpunit' },
+};
+
+const STATE_KEY_MAP = {
+    BASE_SYSTEM_TOOLS:    'base/system-tools',
+    LANGUAGES_NODEJS:     'languages/nodejs',
+    LANGUAGES_PYTHON:     'languages/python',
+    LANGUAGES_PHP:        'languages/php',
+    LANGUAGES_GOLANG:     'languages/golang',
+    LANGUAGES_RUST:       'languages/rust',
+    CONTAINERS_DOCKER:    'containers/docker',
+    CONTAINERS_COMPOSE:   'containers/compose',
+    DATABASES_POSTGRESQL: 'databases/postgresql',
+    DATABASES_MARIADB:    'databases/mariadb',
+    DATABASES_REDIS:      'databases/redis',
+    WEB_NGINX:            'web/nginx',
+    AI_CLAUDE_CODE:       'ai/claude-code',
+    AI_OPENAI_CODEX:      'ai/openai-codex',
+    DEVTOOLS_ZSH:         'devtools/zsh',
+    DEVTOOLS_TMUX:        'devtools/tmux',
+    DEVTOOLS_FZF:         'devtools/fzf',
+    DEVTOOLS_MODERN_CLI:  'devtools/modern-cli',
+    DEVTOOLS_GIT_GITHUB:  'devtools/git-github',
+    DEVTOOLS_CODE_SERVER: 'devtools/code-server',
+    TESTING_PLAYWRIGHT:   'testing/playwright',
+    TESTING_VITEST_JEST:  'testing/vitest-jest',
+    TESTING_PYTEST:       'testing/pytest',
+    TESTING_PHPUNIT:      'testing/phpunit',
+};
+
+async function loadModules() {
+    const [available, registry] = await Promise.all([
+        API.get('/api/modules/available'),
+        API.get('/api/modules')
+    ]);
+
+    const list = document.getElementById('modules-list');
+    if (!available.length) {
+        list.innerHTML = '<div style="padding:20px;color:var(--muted)">Aucun module disponible</div>';
+        return;
+    }
+
+    list.innerHTML = available.map(m => {
+        const meta      = LABELS[m.key] || { name: m.key, icon: '📁', path: m.key.toLowerCase().replace(/_/g, '/') };
+        const stateKey  = STATE_KEY_MAP[m.key] || meta.path;
+        const regEntry  = registry[stateKey];
+        const installed = regEntry?.status === 'installed';
+        const version   = regEntry?.version || '';
+        const badge     = installed
+            ? `<span class="badge installed">installé</span>`
+            : (m.enabled
+                ? `<span class="badge pending">non installé</span>`
+                : `<span class="badge" style="color:var(--muted);background:var(--bg3)">désactivé</span>`);
+        const btn = m.enabled && !installed
+            ? `<button class="btn btn-secondary btn-sm" onclick="installModule('${meta.path}', this)">⬇ Installer</button>`
+            : '';
+        return `
+            <div class="module-row">
+              <div class="module-icon">${meta.icon}</div>
+              <div class="module-info">
+                <div class="module-name">${meta.name}</div>
+                <div class="module-key">${stateKey}${version ? ' · v' + version : ''}</div>
+              </div>
+              <div class="module-actions">
+                ${badge}
+                ${btn}
+              </div>
+            </div>`;
+    }).join('');
+}
+
+async function installModule(path, btn) {
+    btn.disabled = true;
+    btn.textContent = '…';
+    showOutput('Installation de ' + path + '…\n');
+    try {
+        const r = await API.post('/api/run', { command: 'devlab', args: ['install', path] });
+        appendOutput(r.output);
+        if (r.code === 0) {
+            appendOutput('\n✅ Terminé avec succès.\n', 'ok');
+        } else {
+            appendOutput('\n❌ Échec (code ' + r.code + ')\n', 'error');
+        }
+    } catch(e) {
+        appendOutput('\n❌ Erreur : ' + e.message + '\n', 'error');
+    }
+    await loadModules();
+}
+
+function showOutput(text) {
+    const out = document.getElementById('run-output');
+    const log = document.getElementById('run-log');
+    out.style.display = 'block';
+    log.innerHTML = `<div class="log-line">${text}</div>`;
+    out.scrollIntoView({ behavior: 'smooth' });
+}
+
+function appendOutput(text, cls = '') {
+    const log = document.getElementById('run-log');
+    const div = document.createElement('div');
+    div.className = 'log-line ' + cls;
+    div.textContent = text;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+}
+
+document.getElementById('install-all-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('install-all-btn');
+    btn.disabled = true;
+    showOutput('Lancement de devlab install all…\n');
+    try {
+        const r = await API.post('/api/run', { command: 'devlab', args: ['install', 'all'] });
+        appendOutput(r.output);
+        appendOutput(r.code === 0 ? '\n✅ Installation terminée.\n' : '\n❌ Échec (code ' + r.code + ')\n', r.code === 0 ? 'ok' : 'error');
+    } catch(e) {
+        appendOutput('\n❌ ' + e.message, 'error');
+    }
+    btn.disabled = false;
+    await loadModules();
+});
+
+(async () => {
+    const me = await loadUser(u => { window._user = u; renderSidebar('modules'); });
+    if (!me?.authenticated && document.location.pathname !== '/') window.location.href = '/';
+    await loadModules();
+})();
+</script>
+</body>
+</html>
