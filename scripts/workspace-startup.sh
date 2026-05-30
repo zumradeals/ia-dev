@@ -45,6 +45,13 @@ if command -v npm &>/dev/null && [ ! -f "$HOME/.npm-global/bin/claude" ]; then
         || echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
 fi
 
+# Symlink claude dans le PATH système pour que l'extension VS Code le trouve
+if [ -f "$HOME/.npm-global/bin/claude" ] && [ ! -f "/usr/local/bin/claude" ]; then
+    sudo ln -sf "$HOME/.npm-global/bin/claude" /usr/local/bin/claude 2>/dev/null \
+        && echo "[gamad] ✓ claude lié dans /usr/local/bin" \
+        || echo "[gamad] ✗ symlink claude échoué"
+fi
+
 # ── Settings VS Code (clés API + PATH npm) ──────────────────────────────────
 python3 - <<'PYEOF' 2>/dev/null && echo "[gamad] ✓ Settings VS Code"
 import json, os
