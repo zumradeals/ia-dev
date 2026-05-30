@@ -180,33 +180,23 @@ const getWorkspaceStatus = async (userId) => {
     return ws;
 };
 
+const { execFile } = require('child_process');
+const execFileP = (cmd, args, opts) => new Promise((resolve, reject) =>
+    execFile(cmd, args, opts, (err, stdout, stderr) =>
+        err ? reject(Object.assign(err, { stderr })) : resolve(stdout)));
+
 const cloneRepo = async (userId, cloneUrl, repoName) => {
-    const targetPath = `/home/coder/workspace/${repoName}`;
-    const container  = docker.getContainer(`gamadcode-${userId}`);
+    // Clone directement sur le host dans le volume → visible immédiatement dans le conteneur
+    const hostTarget      = path.join(WORKSPACE_BASE, String(userId), repoName);
+    const containerTarget = `/home/coder/workspace/${repoName}`;
 
-    await new Promise((resolve, reject) => {
-        container.exec({
-            Cmd: ['bash', '-c', `[ -d "${targetPath}/.git" ] || git clone --depth=1 "${cloneUrl}" "${targetPath}"`],
-            AttachStdout: true,
-            AttachStderr: true,
-            User: 'coder'
-        }, (err, exec) => {
-            if (err) return reject(err);
-            // hijack:true → stream TCP brut qui se ferme quand le process exit
-            exec.start({ hijack: true }, (err, stream) => {
-                if (err) return reject(err);
-                const { PassThrough } = require('stream');
-                const out = new PassThrough();
-                const err2 = new PassThrough();
-                docker.modem.demuxStream(stream, out, err2);
-                out.resume(); err2.resume();
-                stream.on('end', resolve);
-                stream.on('error', reject);
-            });
-        });
-    });
+    fs.mkdirSync(path.join(WORKSPACE_BASE, String(userId)), { recursive: true });
 
-    return targetPath;
+    if (!fs.existsSync(path.join(hostTarget, '.git'))) {
+        await execFileP('git', ['clone', '--depth=1', cloneUrl, hostTarget], { timeout: 60000 });
+    }
+
+    return containerTarget;
 };
 
 module.exports = { createWorkspace, stopWorkspace, getWorkspaceStatus, cloneRepo };
