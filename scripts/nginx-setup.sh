@@ -114,7 +114,7 @@ if [[ "$ENABLE_HTTPS" == "true" ]]; then
         exit 1
     fi
 
-    local domains_args=""
+    domains_args=""
     [[ -n "$VSCODE_DOMAIN" ]] && domains_args="$domains_args -d $VSCODE_DOMAIN"
     [[ -n "$UI_DOMAIN"     ]] && domains_args="$domains_args -d $UI_DOMAIN"
 
