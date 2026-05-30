@@ -114,6 +114,33 @@ app.get('/api/setup/status', (req, res) => {
     res.json({ done: isSetupDone() });
 });
 
+// ── Config URLs (résout domaine vs IP) ───────────────────────────────────────
+app.get('/api/config/urls', (req, res) => {
+    const domain    = process.env.GAMADCODE_DOMAIN || '';
+    const vscPort   = process.env.CODE_SERVER_PORT || '8080';
+    const uiPort    = process.env.GAMADCODE_UI_PORT || '3000';
+
+    // Détermine le host public à partir de la requête entrante
+    const reqHost   = req.hostname; // Express strip le port
+    const isLocal   = /^(localhost|127\.|::1)/.test(reqHost);
+
+    let vscodeUrl, uiUrl;
+    if (domain) {
+        // Si un domaine est configuré, on l'utilise
+        vscodeUrl = `http://${domain}:${vscPort}`;
+        uiUrl     = `http://${domain}`;
+    } else if (!isLocal) {
+        // Pas de domaine mais requête depuis IP externe → utiliser cet IP
+        vscodeUrl = `http://${reqHost}:${vscPort}`;
+        uiUrl     = `http://${reqHost}:${uiPort}`;
+    } else {
+        vscodeUrl = `http://localhost:${vscPort}`;
+        uiUrl     = `http://localhost:${uiPort}`;
+    }
+
+    res.json({ vscode: vscodeUrl, ui: uiUrl, domain, vscPort, uiPort });
+});
+
 // ── System info ──────────────────────────────────────────────────────────────
 app.get('/api/system', requireAuth, async (req, res) => {
     try {
