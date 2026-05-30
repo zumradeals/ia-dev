@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — GamadCode</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0a0a14; --card:#12121f; --border:#1e1e35;
+  --p:#6366f1; --p2:#a855f7; --text:#e2e8f0; --muted:#64748b;
+  --green:#22c55e; --red:#f87171; --yellow:#fbbf24; --blue:#60a5fa;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
+a { color:inherit; text-decoration:none; }
+
+/* HEADER */
+header { display:flex; align-items:center; justify-content:space-between; padding:16px 28px; border-bottom:1px solid var(--border); background:rgba(10,10,20,.95); backdrop-filter:blur(12px); position:sticky; top:0; z-index:99; }
+.logo { font-size:18px; font-weight:800; background:linear-gradient(135deg,var(--p),var(--p2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.logo span { font-weight:400; opacity:.6; margin-left:6px; font-size:13px; }
+.header-right { display:flex; align-items:center; gap:12px; font-size:13px; color:var(--muted); }
+.btn-sm { padding:6px 14px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:none; color:var(--muted); transition:all .2s; }
+.btn-sm:hover { border-color:var(--p); color:var(--p); }
+
+/* LAYOUT */
+.layout { display:flex; flex:1; }
+nav { width:220px; min-height:calc(100vh - 57px); border-right:1px solid var(--border); padding:20px 12px; display:flex; flex-direction:column; gap:4px; position:sticky; top:57px; height:calc(100vh - 57px); overflow-y:auto; }
+.nav-item { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; font-size:14px; font-weight:500; cursor:pointer; transition:all .15s; color:var(--muted); }
+.nav-item:hover { background:rgba(255,255,255,.04); color:var(--text); }
+.nav-item.active { background:rgba(99,102,241,.12); color:var(--p); }
+.nav-item .icon { font-size:17px; width:20px; text-align:center; }
+.nav-section { font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); padding:16px 14px 6px; }
+.nav-badge { margin-left:auto; background:rgba(99,102,241,.2); color:var(--p); font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; }
+
+main { flex:1; padding:32px; max-width:1200px; }
+
+/* SECTION */
+.section { display:none; }
+.section.active { display:block; }
+.section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+.section-title { font-size:22px; font-weight:700; }
+.section-sub { font-size:14px; color:var(--muted); margin-top:4px; }
+
+/* STATS ROW */
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:24px; }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+.stat-label { font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+.stat-value { font-size:26px; font-weight:800; margin-top:6px; }
+.stat-value.green { color:var(--green); }
+.stat-value.yellow { color:var(--yellow); }
+.stat-value.blue { color:var(--blue); }
+
+/* CARD */
+.card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:20px; }
+.card-title { font-size:15px; font-weight:600; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+
+/* TABLE */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+thead th { text-align:left; padding:10px 14px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); border-bottom:1px solid var(--border); }
+tbody tr { border-bottom:1px solid rgba(255,255,255,.04); transition:background .15s; }
+tbody tr:hover { background:rgba(255,255,255,.02); }
+tbody td { padding:12px 14px; vertical-align:middle; }
+tbody tr:last-child { border-bottom:none; }
+
+/* BADGES */
+.badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+.badge.running  { background:rgba(34,197,94,.1);  color:var(--green);  border:1px solid rgba(34,197,94,.3); }
+.badge.stopped  { background:rgba(248,113,113,.1); color:var(--red);    border:1px solid rgba(248,113,113,.3); }
+.badge.none     { background:rgba(100,116,139,.1); color:var(--muted);  border:1px solid rgba(100,116,139,.3); }
+.badge.admin    { background:rgba(251,191,36,.1);  color:var(--yellow); border:1px solid rgba(251,191,36,.3); }
+.badge.free     { background:rgba(100,116,139,.1); color:var(--muted);  border:1px solid rgba(100,116,139,.3); }
+.badge.pro      { background:rgba(99,102,241,.1);  color:var(--p);      border:1px solid rgba(99,102,241,.3); }
+.badge.enterprise { background:rgba(168,85,247,.1); color:var(--p2);   border:1px solid rgba(168,85,247,.3); }
+.dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+/* ACTIONS */
+.actions { display:flex; gap:6px; flex-wrap:wrap; }
+.btn-act { padding:5px 12px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:none; color:var(--muted); transition:all .15s; white-space:nowrap; }
+.btn-act:hover { border-color:var(--p); color:var(--p); opacity:1; }
+.btn-act.danger:hover { border-color:var(--red); color:var(--red); }
+.btn-act:disabled { opacity:.35; cursor:not-allowed; }
+
+/* SEARCH */
+.search-row { display:flex; gap:10px; margin-bottom:18px; }
+.search-input { flex:1; background:rgba(255,255,255,.04); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:9px; font-size:14px; outline:none; }
+.search-input:focus { border-color:var(--p); }
+.btn-primary { background:linear-gradient(135deg,var(--p),var(--p2)); color:#fff; padding:10px 20px; border-radius:9px; font-size:14px; font-weight:600; cursor:pointer; border:none; transition:opacity .2s; }
+.btn-primary:hover { opacity:.85; }
+
+/* EXTENSIONS EDITOR */
+.ext-editor { width:100%; min-height:260px; background:rgba(0,0,0,.3); border:1px solid var(--border); color:var(--text); padding:16px; border-radius:10px; font-family:monospace; font-size:14px; line-height:1.7; resize:vertical; outline:none; }
+.ext-editor:focus { border-color:var(--p); }
+.ext-hint { font-size:13px; color:var(--muted); margin-bottom:12px; }
+
+/* SYSTÈME */
+.progress { height:8px; background:rgba(255,255,255,.06); border-radius:4px; overflow:hidden; }
+.progress-bar { height:100%; border-radius:4px; background:linear-gradient(90deg,var(--p),var(--p2)); transition:width .5s; }
+.sys-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.sys-item { background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.sys-item .label { font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px; display:flex; justify-content:space-between; }
+.svc-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+.svc-row:last-child { border-bottom:none; }
+.svc-dot { width:8px; height:8px; border-radius:50%; }
+.svc-dot.active { background:var(--green); box-shadow:0 0 6px var(--green); }
+.svc-dot.inactive { background:var(--red); }
+
+/* SPINNER */
+@keyframes spin { to { transform:rotate(360deg); } }
+.spinner { width:14px; height:14px; border:2px solid currentColor; border-top-color:transparent; border-radius:50%; animation:spin .7s linear infinite; display:inline-block; }
+
+/* TOAST */
+#toast { position:fixed; bottom:24px; right:24px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 18px; font-size:14px; transform:translateY(60px); opacity:0; transition:all .3s; z-index:9999; }
+#toast.show { transform:translateY(0); opacity:1; }
+#toast.ok  { border-color:rgba(34,197,94,.4); }
+#toast.err { border-color:rgba(248,113,113,.4); }
+
+/* FACTURATION placeholder */
+.coming-soon { text-align:center; padding:60px 20px; color:var(--muted); }
+.coming-soon .icon { font-size:48px; margin-bottom:16px; }
+.coming-soon h3 { font-size:18px; font-weight:600; margin-bottom:8px; color:var(--text); }
+.coming-soon p { font-size:14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GamadCode <span>Admin</span></div>
+  <div class="header-right">
+    <span id="admin-name"></span>
+    <a href="/my" class="btn-sm">Mon espace</a>
+    <button class="btn-sm" onclick="logout()" style="border-color:rgba(248,113,113,.4);color:var(--red)">Déconnexion</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <nav>
+    <div class="nav-section">Gestion</div>
+    <div class="nav-item active" onclick="goto('users')"><span class="icon">👥</span> Utilisateurs <span class="nav-badge" id="nav-users-count">…</span></div>
+    <div class="nav-item" onclick="goto('workspaces')"><span class="icon">🖥️</span> Workspaces <span class="nav-badge" id="nav-ws-count" style="display:none"></span></div>
+    <div class="nav-item" onclick="goto('extensions')"><span class="icon">🧩</span> Extensions</div>
+    <div class="nav-section">Système</div>
+    <div class="nav-item" onclick="goto('system')"><span class="icon">⚙️</span> Système</div>
+    <div class="nav-item" onclick="goto('billing')"><span class="icon">💳</span> Facturation</div>
+  </nav>
+
+  <main>
+
+    <!-- USERS -->
+    <div class="section active" id="section-users">
+      <div class="section-header">
+        <div><div class="section-title">Utilisateurs</div><div class="section-sub">Gestion des comptes et workspaces</div></div>
+      </div>
+
+      <div class="stats" id="users-stats">
+        <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="stat-total">…</div></div>
+        <div class="stat-card"><div class="stat-label">Workspaces actifs</div><div class="stat-value green" id="stat-running">…</div></div>
+        <div class="stat-card"><div class="stat-label">Plan Free</div><div class="stat-value blue" id="stat-free">…</div></div>
+        <div class="stat-card"><div class="stat-label">Plan Pro</div><div class="stat-value yellow" id="stat-pro">…</div></div>
+      </div>
+
+      <div class="card">
+        <div class="search-row">
+          <input class="search-input" id="user-search" type="text" placeholder="Rechercher par email…" oninput="filterUsers()">
+          <button class="btn-primary" onclick="loadUsers()">↻ Actualiser</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Email</th><th>Plan</th><th>Rôle</th><th>Workspace</th><th>Inscription</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="users-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px"><span class="spinner"></span></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKSPACES -->
+    <div class="section" id="section-workspaces">
+      <div class="section-header">
+        <div><div class="section-title">Workspaces</div><div class="section-sub">Conteneurs Docker en cours d'exécution</div></div>
+        <button class="btn-primary" onclick="loadUsers()">↻ Actualiser</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Utilisateur</th><th>Container ID</th><th>Port</th><th>Statut</th><th>Actions</th></tr></thead>
+            <tbody id="ws-tbody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px"><span class="spinner"></span></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXTENSIONS -->
+    <div class="section" id="section-extensions">
+      <div class="section-header">
+        <div><div class="section-title">Extensions VS Code</div><div class="section-sub">Installées automatiquement dans chaque nouveau workspace</div></div>
+      </div>
+      <div class="card">
+        <p class="ext-hint">Une extension par ligne au format <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">Publisher.extensionId</code>. Les lignes commençant par <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">#</code> sont des commentaires.<br>Les changements s'appliquent aux <strong>nouveaux workspaces</strong> et aux workspaces existants au prochain redémarrage de leur conteneur.</p>
+        <textarea class="ext-editor" id="ext-content" spellcheck="false" placeholder="Chargement…"></textarea>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="btn-primary" onclick="saveExtensions()">💾 Sauvegarder</button>
+          <button class="btn-sm" onclick="loadExtensions()">↻ Recharger</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SYSTÈME -->
+    <div class="section" id="section-system">
+      <div class="section-header">
+        <div><div class="section-title">Système</div><div class="section-sub">Ressources serveur et services</div></div>
+        <button class="btn-primary" onclick="loadSystem()">↻ Actualiser</button>
+      </div>
+      <div class="sys-grid">
+        <div class="card">
+          <div class="card-title">📊 Ressources</div>
+          <div style="display:flex;flex-direction:column;gap:14px" id="sys-resources">
+            <div class="spinner" style="margin:20px auto"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔧 Services</div>
+          <div id="sys-services"><div class="spinner" style="margin:20px auto"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FACTURATION -->
+    <div class="section" id="section-billing">
+      <div class="coming-soon">
+        <div class="icon">💳</div>
+        <h3>Facturation — Phase 2</h3>
+        <p>Intégration Geniuspay prévue. Les bases de données (table <code>plans</code>, colonne <code>users.plan</code>) sont déjà en place.</p>
+        <br>
+        <p style="margin-top:8px">Plans disponibles : <strong>Gratuit</strong> · <strong>Pro</strong> · <strong>Entreprise</strong></p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let allUsers = [];
+
+const API = {
+  async get(u)  { const r = await fetch(u); return r.json(); },
+  async post(u, b) { const r = await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); },
+  async put(u, b)  { const r = await fetch(u,{method:'PUT', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); },
+  async del(u)  { const r = await fetch(u,{method:'DELETE'}); return r.json(); }
+};
+
+const toast = (msg, ok=true) => {
+  const el = document.getElementById('toast');
+  el.textContent = (ok?'✓ ':'✗ ') + msg;
+  el.className = 'show ' + (ok?'ok':'err');
+  setTimeout(()=>el.className='', 3500);
+};
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function goto(id) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelector(`.nav-item[onclick="goto('${id}')"]`).classList.add('active');
+  document.getElementById(`section-${id}`).classList.add('active');
+  if (id === 'system')     loadSystem();
+  if (id === 'extensions') loadExtensions();
+  if (id === 'workspaces') renderWorkspaces(allUsers);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  const me = await API.get('/api/me');
+  if (!me.authenticated) { location.href = '/login'; return; }
+  document.getElementById('admin-name').textContent = me.email || me.login || '';
+  loadUsers();
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+async function loadUsers() {
+  const data = await API.get('/api/admin/users');
+  if (data.error) { toast(data.error, false); return; }
+  allUsers = data;
+
+  const total   = data.length;
+  const running = data.filter(u => u.ws_status === 'running').length;
+  const free    = data.filter(u => (u.plan||'free') === 'free').length;
+  const pro     = data.filter(u => u.plan === 'pro').length;
+
+  document.getElementById('stat-total').textContent   = total;
+  document.getElementById('stat-running').textContent = running;
+  document.getElementById('stat-free').textContent    = free;
+  document.getElementById('stat-pro').textContent     = pro;
+  document.getElementById('nav-users-count').textContent = total;
+
+  const wsRunning = data.filter(u => u.ws_status === 'running').length;
+  const navWs = document.getElementById('nav-ws-count');
+  navWs.textContent = wsRunning;
+  navWs.style.display = wsRunning ? '' : 'none';
+
+  filterUsers();
+}
+
+function filterUsers() {
+  const q = (document.getElementById('user-search').value || '').toLowerCase();
+  const filtered = allUsers.filter(u => !q || u.email.toLowerCase().includes(q) || (u.name||'').toLowerCase().includes(q));
+  renderUsers(filtered);
+}
+
+function renderUsers(users) {
+  const tb = document.getElementById('users-tbody');
+  if (!users.length) { tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">Aucun utilisateur</td></tr>`; return; }
+
+  tb.innerHTML = users.map(u => {
+    const plan    = u.plan || 'free';
+    const wsState = u.ws_status || 'none';
+    const since   = u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '—';
+    const wsActions = wsState === 'running'
+      ? `<button class="btn-act" onclick="stopWs(${u.id},this)">⬛ Stop</button>`
+      : `<button class="btn-act" onclick="resetWs(${u.id},this)">↺ Reset</button>`;
+    return `<tr>
+      <td><div style="font-weight:500">${u.email}</div>${u.name?`<div style="font-size:12px;color:var(--muted)">${u.name}</div>`:''}</td>
+      <td><span class="badge ${plan}" style="cursor:pointer" onclick="cyclePlan(${u.id},'${plan}',this)">${plan}</span></td>
+      <td>${u.is_admin ? '<span class="badge admin">Admin</span>' : '<span style="color:var(--muted);font-size:13px">User</span>'}</td>
+      <td><span class="badge ${wsState}"><span class="dot"></span>${{running:'Actif',stopped:'Arrêté',none:'—'}[wsState]||wsState}</span></td>
+      <td style="color:var(--muted);font-size:13px">${since}</td>
+      <td><div class="actions">${wsActions}<button class="btn-act danger" onclick="deleteUser(${u.id},'${u.email}',this)">🗑</button></div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function cyclePlan(id, current, el) {
+  const plans = ['free','pro','enterprise'];
+  const next  = plans[(plans.indexOf(current)+1) % plans.length];
+  const r = await API.put(`/api/admin/users/${id}`, { plan: next });
+  if (r.error) { toast(r.error, false); return; }
+  el.textContent = next;
+  el.className = `badge ${next}`;
+  const u = allUsers.find(u => u.id === id);
+  if (u) u.plan = next;
+  loadUsers();
+  toast(`Plan mis à jour → ${next}`);
+}
+
+async function stopWs(id, btn) {
+  btn.disabled = true;
+  const r = await API.post(`/api/admin/users/${id}/workspace/stop`, {});
+  btn.disabled = false;
+  if (r.error) { toast(r.error, false); return; }
+  toast('Workspace arrêté');
+  loadUsers();
+}
+
+async function resetWs(id, btn) {
+  if (!confirm('Supprimer et recréer le workspace ? Les fichiers du workspace sont conservés.')) return;
+  btn.disabled = true; btn.textContent = '…';
+  const r = await API.post(`/api/admin/users/${id}/workspace/reset`, {});
+  btn.disabled = false; btn.textContent = '↺ Reset';
+  if (r.error) { toast(r.error, false); return; }
+  toast('Workspace réinitialisé');
+  loadUsers();
+}
+
+async function deleteUser(id, email, btn) {
+  if (!confirm(`Supprimer définitivement l'utilisateur ${email} et ses données ?`)) return;
+  btn.disabled = true;
+  const r = await API.del(`/api/admin/users/${id}`);
+  if (r.error) { toast(r.error, false); btn.disabled = false; return; }
+  toast(`${email} supprimé`);
+  loadUsers();
+}
+
+// ── Workspaces ────────────────────────────────────────────────────────────────
+function renderWorkspaces(users) {
+  const active = users.filter(u => u.ws_status && u.ws_status !== 'none');
+  const tb = document.getElementById('ws-tbody');
+  if (!active.length) { tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">Aucun workspace actif</td></tr>`; return; }
+  tb.innerHTML = active.map(u => `<tr>
+    <td><div style="font-weight:500">${u.email}</div></td>
+    <td style="font-family:monospace;font-size:12px;color:var(--muted)">${(u.container_id||'').slice(0,12)}</td>
+    <td style="font-family:monospace">${u.ws_port||'—'}</td>
+    <td><span class="badge ${u.ws_status}"><span class="dot"></span>${u.ws_status}</span></td>
+    <td><div class="actions">
+      ${u.ws_status==='running'?`<button class="btn-act" onclick="stopWs(${u.id},this)">⬛ Stop</button>`:''}
+      <button class="btn-act danger" onclick="resetWs(${u.id},this)">↺ Reset</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+// ── Extensions ────────────────────────────────────────────────────────────────
+async function loadExtensions() {
+  const r = await API.get('/api/admin/extensions');
+  document.getElementById('ext-content').value = r.content || '';
+}
+
+async function saveExtensions() {
+  const content = document.getElementById('ext-content').value;
+  const r = await API.put('/api/admin/extensions', { content });
+  if (r.error) { toast(r.error, false); return; }
+  toast('Extensions sauvegardées');
+}
+
+// ── Système ───────────────────────────────────────────────────────────────────
+async function loadSystem() {
+  const [sys, svcs] = await Promise.all([API.get('/api/system'), API.get('/api/services')]);
+
+  document.getElementById('sys-resources').innerHTML = [
+    { label:'CPU', pct: sys.cpu?.load||0, val: `${sys.cpu?.load||0}%` },
+    { label:'RAM', pct: sys.mem?.pct||0,  val: `${sys.mem?.pct||0}% — ${fmt(sys.mem?.used)} / ${fmt(sys.mem?.total)}` },
+    { label:'Disque', pct: sys.disk?.pct||0, val: `${sys.disk?.pct||0}% — ${fmt(sys.disk?.used)} / ${fmt(sys.disk?.total)}` }
+  ].map(r => `<div>
+    <div class="label" style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px"><span>${r.label}</span><span>${r.val}</span></div>
+    <div class="progress"><div class="progress-bar" style="width:${r.pct}%;background:${r.pct>85?'var(--red)':r.pct>65?'var(--yellow)':'linear-gradient(90deg,var(--p),var(--p2))'}"></div></div>
+  </div>`).join('');
+
+  document.getElementById('sys-services').innerHTML = svcs.map(s => `
+    <div class="svc-row">
+      <span style="font-size:14px">${s.name}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="svc-dot ${s.status}"></div>
+        <span style="font-size:12px;color:${s.status==='active'?'var(--green)':'var(--red)'}">${s.status==='active'?'Actif':'Inactif'}</span>
+      </div>
+    </div>`).join('');
+}
+
+const fmt = b => !b ? '—' : b > 1e9 ? (b/1e9).toFixed(1)+'Go' : (b/1e6).toFixed(0)+'Mo';
+
+async function logout() {
+  await fetch('/auth/logout', { method: 'POST' });
+  location.href = '/';
+}
+
+init();
+</script>
+</body>
+</html>

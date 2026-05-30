@@ -186,15 +186,20 @@ const cloneRepo = async (userId, cloneUrl, repoName) => {
 
     await new Promise((resolve, reject) => {
         container.exec({
-            Cmd: ['bash', '-c', `[ -d "${targetPath}/.git" ] || git clone --depth=1 "${cloneUrl}" "${targetPath}" 2>&1`],
+            Cmd: ['bash', '-c', `[ -d "${targetPath}/.git" ] || git clone --depth=1 "${cloneUrl}" "${targetPath}"`],
             AttachStdout: true,
             AttachStderr: true,
             User: 'coder'
         }, (err, exec) => {
             if (err) return reject(err);
-            exec.start({}, (err, stream) => {
+            // hijack:true → stream TCP brut qui se ferme quand le process exit
+            exec.start({ hijack: true }, (err, stream) => {
                 if (err) return reject(err);
-                stream.resume();
+                const { PassThrough } = require('stream');
+                const out = new PassThrough();
+                const err2 = new PassThrough();
+                docker.modem.demuxStream(stream, out, err2);
+                out.resume(); err2.resume();
                 stream.on('end', resolve);
                 stream.on('error', reject);
             });

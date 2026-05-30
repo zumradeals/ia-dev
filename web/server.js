@@ -149,10 +149,11 @@ passport.deserializeUser((u, done) => done(null, u));
 
 // ── Middlewares auth ─────────────────────────────────────────────────────────
 const requireAdmin = (req, res, next) => {
-    if (!GITHUB_CLIENT_ID) return next();
-    if (req.isAuthenticated() && req.user?.isAdmin) return next();
+    if (req.isAuthenticated() && req.user?.isAdmin) return next(); // GitHub OAuth
+    if (req.session.isAdmin) return next();                        // email admin
+    if (!GITHUB_CLIENT_ID && !req.session.userId) return next();   // dev mode sans auth
     if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'Accès admin requis' });
-    res.redirect('/');
+    res.redirect('/login');
 };
 
 // Utilisateur email (SaaS) OU admin GitHub
@@ -253,6 +254,7 @@ app.post('/api/auth/login', async (req, res) => {
         const user = await authLib.login(email, password);
         req.session.userId    = user.id;
         req.session.userEmail = user.email;
+        req.session.isAdmin   = user.is_admin || false;
         res.json({ ok: true });
     } catch (e) {
         res.status(401).json({ error: e.message });
@@ -375,7 +377,14 @@ app.post('/api/workspace/open-repo', requireUser, async (req, res) => {
         const ws = await workspaceLib.getWorkspaceStatus(userId);
         if (ws.status !== 'running') return res.status(400).json({ error: 'Démarrez votre environnement d\'abord' });
 
-        const targetPath = await workspaceLib.cloneRepo(userId, cloneUrl, repoName);
+        // Injecter le token dans l'URL pour les dépôts privés
+        let authUrl = cloneUrl;
+        const tokenRow = await db.query("SELECT key_value FROM api_keys WHERE user_id=$1 AND provider='github'", [userId]);
+        if (tokenRow.rows.length && cloneUrl.startsWith('https://github.com/')) {
+            authUrl = cloneUrl.replace('https://github.com/', `https://oauth2:${tokenRow.rows[0].key_value}@github.com/`);
+        }
+
+        const targetPath = await workspaceLib.cloneRepo(userId, authUrl, repoName);
 
         const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
         const token    = generateWsToken(ws.port);
@@ -584,6 +593,88 @@ app.post('/api/run', requireUser, requireAdmin, (req, res) => {
     proc.on('error', err => res.status(500).json({ error: err.message }));
 });
 
+// ── Admin API ─────────────────────────────────────────────────────────────────
+app.get('/api/admin/users', requireUser, requireAdmin, async (req, res) => {
+    loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    try {
+        const r = await db.query(`
+            SELECT u.id, u.email, u.name, u.is_admin, u.plan, u.created_at,
+                   w.status AS ws_status, w.port AS ws_port, w.container_id
+            FROM users u LEFT JOIN workspaces w ON w.user_id = u.id
+            ORDER BY u.created_at DESC`);
+        res.json(r.rows);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/users/:id', requireUser, requireAdmin, async (req, res) => {
+    loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    const { plan, is_admin } = req.body;
+    const fields = [], vals = [];
+    if (plan !== undefined)     { fields.push(`plan=$${fields.length+1}`);     vals.push(plan); }
+    if (is_admin !== undefined) { fields.push(`is_admin=$${fields.length+1}`); vals.push(is_admin); }
+    if (!fields.length) return res.status(400).json({ error: 'Rien à modifier' });
+    vals.push(req.params.id);
+    try {
+        await db.query(`UPDATE users SET ${fields.join(',')} WHERE id=$${vals.length}`, vals);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/admin/users/:id', requireUser, requireAdmin, async (req, res) => {
+    loadLibs();
+    if (!db || !workspaceLib) return res.status(503).json({ error: 'Service non disponible' });
+    try {
+        await workspaceLib.stopWorkspace(req.params.id).catch(() => {});
+        await db.query('DELETE FROM users WHERE id=$1', [req.params.id]);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/users/:id/workspace/stop', requireUser, requireAdmin, async (req, res) => {
+    loadLibs();
+    if (!workspaceLib) return res.status(503).json({ error: 'Service non disponible' });
+    try { await workspaceLib.stopWorkspace(req.params.id); res.json({ ok: true }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/users/:id/workspace/reset', requireUser, requireAdmin, async (req, res) => {
+    loadLibs();
+    if (!workspaceLib || !db) return res.status(503).json({ error: 'Service non disponible' });
+    try {
+        await workspaceLib.stopWorkspace(req.params.id).catch(() => {});
+        const ws = await db.query('SELECT container_id FROM workspaces WHERE user_id=$1', [req.params.id]);
+        if (ws.rows.length && ws.rows[0].container_id) {
+            const Docker = require('dockerode');
+            const d = new Docker({ socketPath: '/var/run/docker.sock' });
+            try { await d.getContainer(ws.rows[0].container_id).remove({ force: true }); } catch {}
+        }
+        await db.query('DELETE FROM workspaces WHERE user_id=$1', [req.params.id]);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+const EXTENSIONS_CONF_PATH = process.env.WORKSPACE_EXTENSIONS_CONF || '/opt/gamadcode/workspace-extensions.conf';
+
+app.get('/api/admin/extensions', requireUser, requireAdmin, (req, res) => {
+    try { res.json({ content: fs.readFileSync(EXTENSIONS_CONF_PATH, 'utf8') }); }
+    catch { res.json({ content: '' }); }
+});
+
+app.put('/api/admin/extensions', requireUser, requireAdmin, (req, res) => {
+    const { content } = req.body;
+    if (typeof content !== 'string') return res.status(400).json({ error: 'Contenu invalide' });
+    try {
+        fs.writeFileSync(EXTENSIONS_CONF_PATH, content, 'utf8');
+        // Synchroniser le repo si symlink
+        const repoPath = path.join(DEVLAB_ROOT, 'config/workspace-extensions.conf');
+        if (!fs.existsSync(repoPath) || fs.readFileSync(repoPath,'utf8') !== content)
+            fs.writeFileSync(repoPath, content, 'utf8');
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── WebSocket — routing centralisé ───────────────────────────────────────────
 // noServer: true évite que wss détruise les sockets code.gamad.net
 const wss = new WebSocketServer({ noServer: true });
@@ -628,6 +719,7 @@ app.get('/',          (req, res) => res.sendFile(path.join(__dirname, 'public/la
 app.get('/login',     (req, res) => res.sendFile(path.join(__dirname, 'public/login.html')));
 app.get('/my',        requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/user-dashboard.html')));
 app.get('/dashboard', requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/dashboard.html')));
+app.get('/admin',     requireUser, requireAdmin, (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
 app.get('/modules',   requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/modules.html')));
 app.get('/logs',      requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/logs.html')));
 app.get('/setup',     (req, res)  => res.sendFile(path.join(__dirname, 'public/setup.html')));
