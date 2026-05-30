@@ -104,10 +104,42 @@ EOF
     fi
 }
 
+_configure_nginx_proxy() {
+    local domain="${GAMADCODE_DOMAIN:-}"
+    [[ -z "$domain" ]] && return 0
+    command_exists nginx || return 0
+
+    local conf="/etc/nginx/conf.d/code-server.conf"
+    [[ -f "$conf" ]] && { log_skip "Nginx code-server déjà configuré"; return 0; }
+
+    cat > "$conf" << EOF
+server {
+    listen 80;
+    server_name ${domain};
+
+    location / {
+        proxy_pass http://127.0.0.1:${CODE_SERVER_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 3600s;
+        proxy_buffering off;
+    }
+}
+EOF
+    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    log_ok "Nginx proxy code-server → ${domain} → :${CODE_SERVER_PORT}"
+}
+
 _do_install() {
     _install_binary
     _configure
     _setup_systemd
+    _configure_nginx_proxy
 }
 
 installer_run \

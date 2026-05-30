@@ -43,7 +43,7 @@
 
       <!-- Quick actions -->
       <div style="margin-bottom:24px;display:flex;gap:10px;flex-wrap:wrap">
-        <a href="http://localhost:8080" target="_blank" class="btn btn-primary">
+        <a id="vscode-btn" href="#" target="_blank" class="btn btn-primary">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
           Ouvrir VS Code
         </a>
@@ -84,6 +84,18 @@
     if (!me?.authenticated && document.location.pathname !== '/') {
         window.location.href = '/';
     }
+
+    // Bouton VS Code — utilise le domaine/IP réel (jamais localhost)
+    (async () => {
+        try {
+            const cfg = await API.get('/api/config/urls');
+            document.getElementById('vscode-btn').href = cfg.vscode;
+        } catch {
+            // fallback : même hôte, port 8080
+            document.getElementById('vscode-btn').href =
+                `${location.protocol}//${location.hostname}:8080`;
+        }
+    })();
 
     async function loadMetrics() {
         try {

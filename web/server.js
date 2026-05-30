@@ -32,13 +32,15 @@ const ADMIN_GITHUB_LOGIN   = process.env.ADMIN_GITHUB_LOGIN   || '';
 const app    = express();
 const server = http.createServer(app);
 
+app.set('trust proxy', 1); // fait confiance à nginx pour X-Forwarded-Proto
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }
+    cookie: { secure: 'auto', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -112,6 +114,41 @@ const isSetupDone = () => {
 
 app.get('/api/setup/status', (req, res) => {
     res.json({ done: isSetupDone() });
+});
+
+// ── Config URLs (résout domaine vs IP) ───────────────────────────────────────
+app.get('/api/config/urls', (req, res) => {
+    const vscodeDomain = process.env.GAMADCODE_DOMAIN    || '';  // ex: code.gamad.net
+    const uiDomain     = process.env.GAMADCODE_UI_DOMAIN || '';  // ex: app.gamad.net
+    const vscPort      = process.env.CODE_SERVER_PORT    || '8080';
+    const uiPort       = process.env.GAMADCODE_UI_PORT   || '3000';
+
+    // req.protocol tient compte de X-Forwarded-Proto grâce à trust proxy
+    const proto   = req.protocol || 'http';   // 'https' si certbot actif
+    const reqHost = req.hostname;
+    const isLocal = /^(localhost|127\.|::1)/.test(reqHost);
+
+    let vscodeUrl, uiUrl;
+
+    // VS Code URL — domaine sans port (nginx/certbot gèrent 80/443)
+    if (vscodeDomain) {
+        vscodeUrl = `${proto}://${vscodeDomain}`;
+    } else if (!isLocal) {
+        vscodeUrl = `http://${reqHost}:${vscPort}`;
+    } else {
+        vscodeUrl = `http://localhost:${vscPort}`;
+    }
+
+    // Dashboard URL
+    if (uiDomain) {
+        uiUrl = `${proto}://${uiDomain}`;
+    } else if (!isLocal) {
+        uiUrl = `http://${reqHost}:${uiPort}`;
+    } else {
+        uiUrl = `http://localhost:${uiPort}`;
+    }
+
+    res.json({ vscode: vscodeUrl, ui: uiUrl, vscodeDomain, uiDomain, vscPort, uiPort });
 });
 
 // ── System info ──────────────────────────────────────────────────────────────
