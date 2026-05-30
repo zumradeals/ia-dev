@@ -11,6 +11,10 @@ DevLab n'est pas un script d'installation — c'est un **firmware de laboratoire
 - **Modulaire** : chaque outil s'installe indépendamment
 - **Versionnable** : clonable et reconstructible sur n'importe quel VPS
 
+> **Opérateur par défaut : root**
+> DevLab installe tous les outils dans le profil root. Aucun utilisateur `devuser` n'est créé.
+> Vous travaillez entièrement en root — Claude Code, Node.js, Git, tout est dans `/root`.
+
 ## Démarrage rapide
 
 ```bash

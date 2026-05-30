@@ -18,6 +18,20 @@ require_root
 log_init "base-packages" "bootstrap"
 log_section "Paquets système de base"
 
+# ── Arrêt unattended-upgrades ─────────────────
+# unattended-upgrades se déclenche souvent au boot et tient le lock APT
+# On l'arrête le temps du bootstrap, systemd le relancera automatiquement
+if systemctl is-active --quiet unattended-upgrades 2>/dev/null; then
+    log_info "Arrêt de unattended-upgrades pour libérer le lock APT..."
+    systemctl stop unattended-upgrades || true
+    # Tuer aussi dpkg/apt en cours si présents
+    while lsof /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+        log_info "Attente libération lock APT..."
+        sleep 3
+    done
+    log_ok "Lock APT libéré"
+fi
+
 # ── Mise à jour index APT ─────────────────────
 log_info "Mise à jour APT..."
 DEBIAN_FRONTEND=noninteractive apt-get update -qq

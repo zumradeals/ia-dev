@@ -24,8 +24,8 @@ _load_config() {
     local local_env="${DEVLAB_ROOT}/config/local.env"
     local secrets_env="${DEVLAB_ROOT}/config/secrets.env"
 
-    # Utiliser if/fi et non && : avec set -e, [[ -f ]] && source retourne 1
-    # quand le fichier est absent, ce qui fait exit la fonction silencieusement.
+    # if/fi obligatoire : avec set -e, [[ -f ]] && source retourne 1
+    # quand le fichier est absent, causant un exit silencieux de la fonction.
     # shellcheck source=/dev/null
     if [[ -f "$default_env" ]];   then source "$default_env";  fi
     # shellcheck source=/dev/null

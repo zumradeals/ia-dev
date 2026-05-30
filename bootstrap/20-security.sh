@@ -54,10 +54,18 @@ log_section "Durcissement SSH"
 SSHD_CONFIG="/etc/ssh/sshd_config"
 backup_file "$SSHD_CONFIG"
 
-# Paramètres de durcissement
-declare -A SSH_PARAMS=(
-    ["PermitRootLogin"]="${SSH_PERMIT_ROOT:-no}"
-    ["PasswordAuthentication"]="${SSH_PASSWORD_AUTH:-no}"
+# Vérifier qu'une clé SSH est disponible avant de désactiver le mot de passe
+_ssh_key_exists() {
+    local user="${DEVLAB_USER:-devuser}"
+    local root_keys="/root/.ssh/authorized_keys"
+    local user_keys
+    user_keys="$(getent passwd "$user" | cut -d: -f6)/.ssh/authorized_keys"
+
+    [[ -s "$root_keys" ]] || [[ -s "$user_keys" ]]
+}
+
+# Paramètres toujours appliqués (sans risque de lockout)
+declare -A SSH_SAFE_PARAMS=(
     ["MaxAuthTries"]="${SSH_MAX_AUTH_TRIES:-3}"
     ["X11Forwarding"]="no"
     ["PermitEmptyPasswords"]="no"
@@ -67,8 +75,8 @@ declare -A SSH_PARAMS=(
     ["ClientAliveCountMax"]="2"
 )
 
-for param in "${!SSH_PARAMS[@]}"; do
-    value="${SSH_PARAMS[$param]}"
+for param in "${!SSH_SAFE_PARAMS[@]}"; do
+    value="${SSH_SAFE_PARAMS[$param]}"
     if grep -qE "^${param}\s" "$SSHD_CONFIG"; then
         sed -i "s|^${param}\s.*|${param} ${value}|" "$SSHD_CONFIG"
     elif grep -qE "^#${param}\s" "$SSHD_CONFIG"; then
@@ -78,6 +86,27 @@ for param in "${!SSH_PARAMS[@]}"; do
     fi
     log_step "${param} = ${value}"
 done
+
+# PermitRootLogin : appliqué seulement si SSH_PERMIT_ROOT est explicitement "no"
+if [[ "${SSH_PERMIT_ROOT:-}" == "no" ]]; then
+    sed -i "s|^#\?PermitRootLogin\s.*|PermitRootLogin no|" "$SSHD_CONFIG"
+    log_step "PermitRootLogin = no"
+else
+    log_skip "PermitRootLogin conservé (SSH_PERMIT_ROOT non forcé à 'no')"
+fi
+
+# PasswordAuthentication : seulement si une clé SSH est déjà présente
+if [[ "${SSH_PASSWORD_AUTH:-}" == "no" ]]; then
+    if _ssh_key_exists; then
+        sed -i "s|^#\?PasswordAuthentication\s.*|PasswordAuthentication no|" "$SSHD_CONFIG"
+        log_ok "PasswordAuthentication = no (clé SSH détectée)"
+    else
+        log_warn "PasswordAuthentication NON désactivé — aucune clé SSH trouvée dans authorized_keys"
+        log_warn "Ajoutez d'abord votre clé SSH, puis relancez : devlab reset bootstrap.security && sudo devlab bootstrap"
+    fi
+else
+    log_skip "PasswordAuthentication conservé (SSH_PASSWORD_AUTH non forcé à 'no')"
+fi
 
 # Validation syntaxe avant rechargement
 if sshd -t 2>/dev/null; then
@@ -91,5 +120,6 @@ fi
 state_set "bootstrap.security" "$(date +%Y%m%d)" "installed"
 log_ok "Configuration sécurité terminée"
 echo
-log_warn "ATTENTION : PasswordAuthentication=no — assurez-vous d'avoir une clé SSH configurée !"
-log_info "Pour autoriser l'accès par clé : cat ~/.ssh/id_rsa.pub >> /home/${DEVLAB_USER:-devuser}/.ssh/authorized_keys"
+log_info "Pour durcir SSH (désactiver le mot de passe), configurez dans config/local.env :"
+log_info "  SSH_PASSWORD_AUTH=no  # requiert une clé dans ~/.ssh/authorized_keys"
+log_info "  SSH_PERMIT_ROOT=no    # recommandé si vous utilisez devuser"

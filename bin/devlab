@@ -7,11 +7,9 @@ set -euo pipefail
 # ─────────────────────────────────────────────
 # BOOTSTRAP INTERNE
 # ─────────────────────────────────────────────
-# readlink -f résout le lien symbolique vers le fichier réel
-# sans ça, dirname donne /usr/local/bin au lieu de /devlab-bootstrap/bin
-_REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
-DEVLAB_ROOT="$(cd "$(dirname "${_REAL_SCRIPT}")/.." && pwd)"
-unset _REAL_SCRIPT
+_REAL="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+DEVLAB_ROOT="$(cd "$(dirname "${_REAL}")/.." && pwd)"
+unset _REAL
 export DEVLAB_ROOT
 
 # shellcheck source=../lib/core.sh
@@ -76,8 +74,8 @@ ${C_BOLD}Modules disponibles :${C_RESET}
   devtools/tmux              ai/openai-codex
   devtools/fzf               testing/playwright
   devtools/modern-cli        testing/vitest-jest
-  devtools/code-server        testing/pytest
-                             testing/phpunit
+  devtools/git-github        testing/pytest
+  devtools/code-server       testing/phpunit
 
 EOF
 }
@@ -168,6 +166,7 @@ _install_all_enabled() {
         "MODULE_DEVTOOLS_TMUX:devtools/20-tmux.sh"
         "MODULE_DEVTOOLS_FZF:devtools/30-fzf.sh"
         "MODULE_DEVTOOLS_MODERN_CLI:devtools/40-modern-cli.sh"
+        "MODULE_DEVTOOLS_GIT_GITHUB:devtools/60-git-github.sh"
         "MODULE_DEVTOOLS_CODE_SERVER:devtools/50-code-server.sh"
         "MODULE_AI_CLAUDE_CODE:ai/10-claude-code.sh"
         "MODULE_AI_OPENAI_CODEX:ai/20-openai-codex.sh"
@@ -219,8 +218,11 @@ _install_module() {
     [[ -f "${script_path}.sh" ]] && script_path="${script_path}.sh"
 
     if [[ ! -f "$script_path" ]]; then
-        # Recherche partielle
-        local found; found=$(find "${DEVLAB_ROOT}/installers" -name "*${module}*" -name "*.sh" 2>/dev/null | head -1)
+        # Recherche partielle dans le bon sous-répertoire (basename pour éviter le slash)
+        local module_dir; module_dir=$(dirname "$module")
+        local module_base; module_base=$(basename "$module")
+        local search_dir="${DEVLAB_ROOT}/installers/${module_dir}"
+        local found; found=$(find "$search_dir" -maxdepth 1 -name "*${module_base}*" -name "*.sh" 2>/dev/null | sort | head -1)
         if [[ -n "$found" ]]; then
             script_path="$found"
         else

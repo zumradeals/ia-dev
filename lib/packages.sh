@@ -11,8 +11,27 @@ check_apt_package() {
     dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
 }
 
+_wait_dpkg_lock() {
+    local waited=0
+    # Attendre que unattended-upgrades ou autre process libère le lock APT
+    while flock -n /var/lib/dpkg/lock-frontend /bin/true 2>/dev/null; do
+        break
+    done
+    while ! flock -n /var/lib/dpkg/lock-frontend /bin/true 2>/dev/null; do
+        if [[ $waited -eq 0 ]]; then
+            log_info "dpkg lock occupé (unattended-upgrades?), attente libération..."
+        fi
+        sleep 5
+        (( waited += 5 )) || true
+        if [[ $waited -ge 300 ]]; then
+            log_fatal "dpkg lock non libéré après 5min — vérifiez avec: lsof /var/lib/dpkg/lock-frontend"
+        fi
+    done
+}
+
 apt_update() {
     log_step "Mise à jour de l'index APT"
+    _wait_dpkg_lock
     DEBIAN_FRONTEND=noninteractive apt-get update -qq
 }
 
@@ -35,6 +54,7 @@ apt_install() {
     fi
 
     log_step "APT install : ${to_install[*]}"
+    _wait_dpkg_lock
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${to_install[@]}"
 }
 

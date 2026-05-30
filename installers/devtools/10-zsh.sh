@@ -86,7 +86,40 @@ _configure_zshrc() {
             chown "${DEVLAB_USER}:$(id -gn "$DEVLAB_USER")" "$zshrc"
             log_step ".zshrc configuré depuis template"
         else
-            log_skip ".zshrc existe déjà (pas d'écrasement)"
+            # Injecter les blocs essentiels manquants dans le .zshrc existant
+            local user_group; user_group=$(id -gn "$DEVLAB_USER")
+
+            # export ZSH manquant (cause l'erreur /oh-my-zsh.sh)
+            if ! grep -q 'export ZSH=' "$zshrc"; then
+                sed -i '1s|^|export ZSH="$HOME/.oh-my-zsh"\n|' "$zshrc"
+                log_step ".zshrc : export ZSH ajouté"
+            fi
+
+            # NVM manquant
+            if ! grep -q 'NVM_DIR' "$zshrc"; then
+                cat >> "$zshrc" << 'NVM'
+
+# nvm
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+NVM
+                log_step ".zshrc : bloc NVM ajouté"
+            fi
+
+            # DEVLAB_ROOT manquant
+            if ! grep -q 'DEVLAB_ROOT' "$zshrc"; then
+                cat >> "$zshrc" << DEVLAB
+
+# DevLab
+export DEVLAB_ROOT="${DEVLAB_ROOT}"
+export PATH="${DEVLAB_ROOT}/bin:\$PATH"
+DEVLAB
+                log_step ".zshrc : DEVLAB_ROOT ajouté"
+            fi
+
+            chown "${DEVLAB_USER}:${user_group}" "$zshrc"
+            log_skip ".zshrc : blocs essentiels vérifiés/complétés"
         fi
     fi
 
