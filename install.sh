@@ -301,7 +301,7 @@ echo
 # S'assurer que PostgreSQL tourne
 run_step "Démarrage PostgreSQL" systemctl start postgresql
 
-# Créer DB et user de façon idempotente (IF NOT EXISTS)
+# Créer DB et user de façon idempotente
 run_step "Création DB gamadcode" bash -c \
     "sudo -u postgres psql -tc \"SELECT 1 FROM pg_database WHERE datname='gamadcode'\" | grep -q 1 \
      || sudo -u postgres psql -c \"CREATE DATABASE gamadcode;\""
@@ -310,9 +310,11 @@ run_step "Création user gamadcode" bash -c \
     "sudo -u postgres psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='gamadcode'\" | grep -q 1 \
      || sudo -u postgres psql -c \"CREATE USER gamadcode WITH PASSWORD '${POSTGRES_PASSWORD}';\""
 
+run_step "Synchronisation mot de passe" bash -c \
+    "sudo -u postgres psql -c \"ALTER USER gamadcode WITH PASSWORD '${POSTGRES_PASSWORD}';\""
+
 run_step "Droits sur la DB" bash -c \
     "sudo -u postgres psql -c \"GRANT ALL PRIVILEGES ON DATABASE gamadcode TO gamadcode;\""
-
 run_step "Droits schema public" bash -c \
     "sudo -u postgres psql -d gamadcode -c \"GRANT ALL ON SCHEMA public TO gamadcode;\""
 
