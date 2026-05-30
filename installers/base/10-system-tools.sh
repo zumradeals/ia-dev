@@ -31,7 +31,7 @@ _do_install() {
         screen \
         net-tools \
         iputils-ping \
-        dnsutils \
+        bind9-dnsutils \
         nmap \
         lsof \
         strace \

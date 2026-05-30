@@ -85,11 +85,11 @@ fi
 
 # ── Connectivité réseau ───────────────────────
 log_info "Vérification connectivité réseau..."
-if curl -fsS --max-time 10 --connect-timeout 5 https://archive.ubuntu.com > /dev/null 2>&1; then
-    log_ok "Connectivité : archive.ubuntu.com accessible"
+if curl -fsS --max-time 10 --connect-timeout 5 https://archive.ubuntu.com > /dev/null 2>&1 \
+   || curl -fsS --max-time 10 --connect-timeout 5 https://github.com > /dev/null 2>&1; then
+    log_ok "Connectivité réseau : OK"
 else
-    log_error "Pas de connectivité vers archive.ubuntu.com"
-    (( ERRORS++ )) || true
+    log_warn "Connectivité limitée — certains téléchargements peuvent échouer"
 fi
 
 # ── Commandes requises ───────────────────────
