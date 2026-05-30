@@ -8,7 +8,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 const PORT_MIN           = 10000;
 const PORT_MAX           = 20000;
-const CODE_SERVER_IMAGE  = process.env.CODE_SERVER_IMAGE || 'codercom/code-server:latest';
+const WORKSPACE_IMAGE    = process.env.WORKSPACE_IMAGE   || 'gitpod/openvscode-server:latest';
 const WORKSPACE_BASE     = process.env.WORKSPACE_BASE    || '/opt/gamadcode/users';
 
 const PROVIDER_ENV_MAP = {
@@ -70,8 +70,8 @@ const createWorkspace = async (userId) => {
             try {
                 const c    = docker.getContainer(ws.container_id);
                 const info = await c.inspect();
-                const cmd = info.Config?.Cmd || [];
-                const isUpToDate = cmd.includes('--auth=none') && cmd.includes('/home/coder/workspace');
+                const image = info.Config?.Image || '';
+                const isUpToDate = image.includes('openvscode-server');
 
                 if (isUpToDate) {
                     if (!info.State.Running) {
@@ -102,17 +102,16 @@ const createWorkspace = async (userId) => {
     const EXTENSIONS_CONF   = process.env.WORKSPACE_EXTENSIONS_CONF   || '/opt/gamadcode/workspace-extensions.conf';
 
     const container = await docker.createContainer({
-        Image:      CODE_SERVER_IMAGE,
+        Image:      WORKSPACE_IMAGE,
         name:       `gamadcode-${userId}`,
-        Entrypoint: ['/usr/bin/entrypoint.sh'],
-        Cmd:        ['--bind-addr=0.0.0.0:8080', '--auth=none', '/home/coder/workspace'],
+        Entrypoint: ['/bin/sh', STARTUP_SCRIPT],
+        Cmd:        [],
         Env:        envVars,
         ExposedPorts: { '8080/tcp': {} },
         HostConfig: {
             PortBindings:  { '8080/tcp': [{ HostPort: String(port) }] },
             Binds: [
-                `${wsPath}:/home/coder/workspace`,
-                `${STARTUP_SCRIPT}:/entrypoint.d/gamad-setup.sh:ro`,
+                `${wsPath}:/home/workspace`,
                 `${EXTENSIONS_CONF}:/opt/gamadcode/extensions.conf:ro`
             ],
             RestartPolicy: { Name: 'unless-stopped' }
@@ -188,7 +187,7 @@ const execFileP = (cmd, args, opts) => new Promise((resolve, reject) =>
 const cloneRepo = async (userId, cloneUrl, repoName) => {
     // Clone directement sur le host dans le volume → visible immédiatement dans le conteneur
     const hostTarget      = path.join(WORKSPACE_BASE, String(userId), repoName);
-    const containerTarget = `/home/coder/workspace/${repoName}`;
+    const containerTarget = `/home/workspace/${repoName}`;
 
     fs.mkdirSync(path.join(WORKSPACE_BASE, String(userId)), { recursive: true });
 
