@@ -524,16 +524,29 @@ app.post('/api/run', requireUser, requireAdmin, (req, res) => {
     proc.on('error', err => res.status(500).json({ error: err.message }));
 });
 
-// ── WebSocket — live logs ─────────────────────────────────────────────────────
-const wss = new WebSocketServer({ server, path: '/ws/logs' });
+// ── WebSocket — routing centralisé ───────────────────────────────────────────
+// noServer: true évite que wss détruise les sockets code.gamad.net
+const wss = new WebSocketServer({ noServer: true });
 
-// Proxy WebSocket upgrades pour les workspaces code.gamad.net
 server.on('upgrade', (req, socket, head) => {
     const host = (req.headers.host || '').split(':')[0];
-    if (host !== 'code.gamad.net') return;
-    const port = parseCookie(req.headers.cookie, 'ws_port');
-    if (!port || !/^\d+$/.test(port)) { socket.destroy(); return; }
-    workspaceProxy.upgrade(req, socket, head);
+
+    // Workspace code-server → proxy vers le conteneur Docker
+    if (host === 'code.gamad.net') {
+        const port = parseCookie(req.headers.cookie, 'ws_port');
+        if (!port || !/^\d+$/.test(port)) { socket.destroy(); return; }
+        workspaceProxy.upgrade(req, socket, head);
+        return;
+    }
+
+    // Live logs → wss
+    const urlPath = (req.url || '').split('?')[0];
+    if (urlPath === '/ws/logs') {
+        wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+        return;
+    }
+
+    socket.destroy();
 });
 
 wss.on('connection', (ws) => {
