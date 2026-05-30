@@ -38,6 +38,7 @@ ${C_BOLD}Usage :${C_RESET}
 ${C_BOLD}Commandes :${C_RESET}
   ${C_GREEN}bootstrap${C_RESET}               Bootstrap système initial (root requis)
   ${C_GREEN}install${C_RESET} [module|all]     Installe un module ou tous les modules activés
+  ${C_GREEN}nginx${C_RESET} [--https] [--email EMAIL]  Configure Nginx + certbot HTTPS
   ${C_GREEN}status${C_RESET}                   Affiche l'état de tous les modules
   ${C_GREEN}check${C_RESET}                    Vérifie les versions installées
   ${C_GREEN}update${C_RESET}                   Met à jour le système et les outils
@@ -59,6 +60,7 @@ ${C_BOLD}Exemples :${C_RESET}
   sudo devlab bootstrap             # Bootstrap initial (root)
   devlab install all                # Installe tous les modules activés
   devlab install languages/nodejs   # Installe Node.js uniquement
+  devlab nginx --https --email toi@mail.com  # Nginx + HTTPS automatique
   devlab status                     # Voir ce qui est installé
   devlab health                     # Diagnostic complet
   devlab backup                     # Sauvegarder les configs
@@ -278,6 +280,14 @@ cmd_check() {
 }
 
 # ─────────────────────────────────────────────
+# COMMANDE : nginx
+# ─────────────────────────────────────────────
+cmd_nginx() {
+    require_root
+    bash "${DEVLAB_ROOT}/scripts/nginx-setup.sh" "$@"
+}
+
+# ─────────────────────────────────────────────
 # COMMANDE : health
 # ─────────────────────────────────────────────
 cmd_health() {
@@ -358,6 +368,7 @@ main() {
     case "$command" in
         bootstrap)     cmd_bootstrap "$@" ;;
         install)       cmd_install "$@" ;;
+        nginx)         cmd_nginx "$@" ;;
         status)        cmd_status ;;
         check)         cmd_check ;;
         health)        cmd_health ;;
