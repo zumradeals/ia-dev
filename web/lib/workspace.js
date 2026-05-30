@@ -70,10 +70,10 @@ const createWorkspace = async (userId) => {
             try {
                 const c    = docker.getContainer(ws.container_id);
                 const info = await c.inspect();
-                const hasAuthNone = (info.Config?.Cmd || []).includes('--auth=none');
+                const cmd = info.Config?.Cmd || [];
+                const isUpToDate = cmd.some(c => c.includes('start-workspace'));
 
-                if (hasAuthNone) {
-                    // Config correcte : démarrer si nécessaire puis retourner
+                if (isUpToDate) {
                     if (!info.State.Running) {
                         await c.start();
                         await db.query(
@@ -83,7 +83,7 @@ const createWorkspace = async (userId) => {
                     }
                     return { ...ws, status: 'running' };
                 }
-                // Ancienne config sans --auth=none → stopper, supprimer, recréer
+                // Ancienne config → stopper, supprimer, recréer avec le nouveau script
                 try { await c.stop({ t: 5 }); } catch { /* déjà arrêté */ }
                 await c.remove();
             } catch { /* conteneur introuvable → recréer */ }
@@ -98,15 +98,20 @@ const createWorkspace = async (userId) => {
     fs.mkdirSync(wsPath, { recursive: true });
     await ensureImage(CODE_SERVER_IMAGE);
 
+    const STARTUP_SCRIPT = process.env.WORKSPACE_STARTUP_SCRIPT || '/opt/gamadcode/start-workspace.sh';
+
     const container = await docker.createContainer({
         Image: CODE_SERVER_IMAGE,
         name:  `gamadcode-${userId}`,
-        Cmd:   ['--bind-addr=0.0.0.0:8080', '--auth=none'],
+        Cmd:   ['/usr/local/bin/start-workspace.sh'],
         Env:   envVars,
         ExposedPorts: { '8080/tcp': {} },
         HostConfig: {
             PortBindings:  { '8080/tcp': [{ HostPort: String(port) }] },
-            Binds:         [`${wsPath}:/home/coder/workspace`],
+            Binds: [
+                `${wsPath}:/home/coder/workspace`,
+                `${STARTUP_SCRIPT}:/usr/local/bin/start-workspace.sh:ro`
+            ],
             RestartPolicy: { Name: 'unless-stopped' }
         }
     });
