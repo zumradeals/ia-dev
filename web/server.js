@@ -14,6 +14,7 @@ const fs         = require('fs');
 const path       = require('path');
 const http       = require('http');
 const crypto     = require('crypto');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 require('dotenv').config({ path: path.join(__dirname, '../config/secrets.env') });
 require('dotenv').config({ path: path.join(__dirname, '../config/local.env'), override: false });
@@ -28,6 +29,41 @@ const GITHUB_CLIENT_ID   = process.env.GITHUB_CLIENT_ID   || '';
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
 const GITHUB_CALLBACK_URL  = process.env.GITHUB_CALLBACK_URL  || `http://localhost:${PORT}/auth/github/callback`;
 const ADMIN_GITHUB_LOGIN   = process.env.ADMIN_GITHUB_LOGIN   || '';
+
+// ── Workspace proxy helpers ───────────────────────────────────────────────────
+const wsTokenStore = new Map(); // token → { port, created }
+
+const generateWsToken = (port) => {
+    const cutoff = Date.now() - 86400000;
+    for (const [k, v] of wsTokenStore) if (v.created < cutoff) wsTokenStore.delete(k);
+    const token = crypto.randomBytes(32).toString('hex');
+    wsTokenStore.set(token, { port, created: Date.now() });
+    return token;
+};
+
+const parseCookie = (header, name) => {
+    const m = (header || '').match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+};
+
+const workspaceProxy = createProxyMiddleware({
+    target: 'http://127.0.0.1',
+    router: (req) => {
+        const port = parseCookie(req.headers.cookie, 'ws_port');
+        return `http://127.0.0.1:${port}`;
+    },
+    changeOrigin: false,
+    ws: true,
+    on: {
+        error: (err, req, res) => {
+            if (res && !res.headersSent && typeof res.status === 'function') {
+                res.status(502).type('html').send(
+                    'Workspace inaccessible — vérifiez qu\'il est démarré sur <a href="https://app.gamad.net/my">app.gamad.net</a>.'
+                );
+            }
+        }
+    }
+});
 
 // DB + Auth + Workspace (lazy — ne crash pas si pg non configuré au boot)
 let db, authLib, workspaceLib;
@@ -58,6 +94,34 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+
+// ── Proxy workspace (code.gamad.net) ─────────────────────────────────────────
+app.use((req, res, next) => {
+    const host = (req.headers.host || '').split(':')[0];
+    if (host !== 'code.gamad.net') return next();
+
+    // Token reçu → valider → set cookie → redirect
+    if (req.query.wstoken) {
+        const data = wsTokenStore.get(req.query.wstoken);
+        if (!data || Date.now() - data.created > 86400000) {
+            return res.status(403).type('html').send(
+                'Lien expiré. <a href="https://app.gamad.net/my">Retour à app.gamad.net</a>.'
+            );
+        }
+        res.setHeader('Set-Cookie', `ws_port=${data.port}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=86400`);
+        return res.redirect(302, '/');
+    }
+
+    // Cookie présent → proxy vers le workspace
+    const port = parseCookie(req.headers.cookie, 'ws_port');
+    if (!port || !/^\d+$/.test(port)) {
+        return res.status(403).type('html').send(
+            'Non autorisé. <a href="https://app.gamad.net/my">Ouvrez votre workspace depuis app.gamad.net</a>.'
+        );
+    }
+    workspaceProxy(req, res, next);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── GitHub OAuth (admin) ─────────────────────────────────────────────────────
@@ -218,8 +282,9 @@ app.get('/api/workspace', requireUser, async (req, res) => {
         // Construire l'URL d'accès au workspace
         let url = null;
         if (ws.status === 'running' && ws.port) {
-            const wsHost = process.env.GAMADCODE_DOMAIN || req.hostname;
-            url = `http://${wsHost}:${ws.port}`;
+            const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
+            const token    = generateWsToken(ws.port);
+            url = `https://${wsDomain}/?wstoken=${token}`;
         }
 
         res.json({ ...ws, url });
@@ -234,9 +299,10 @@ app.post('/api/workspace/start', requireUser, async (req, res) => {
     if (!userId || !workspaceLib) return res.status(503).json({ error: 'Service non disponible' });
 
     try {
-        const ws = await workspaceLib.createWorkspace(userId);
-        const wsHost = process.env.GAMADCODE_DOMAIN || req.hostname;
-        const url    = `http://${wsHost}:${ws.port}`;
+        const ws       = await workspaceLib.createWorkspace(userId);
+        const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
+        const token    = generateWsToken(ws.port);
+        const url      = `https://${wsDomain}/?wstoken=${token}`;
         res.json({ ...ws, url });
     } catch (e) {
         console.error('[workspace] start error:', e.message);
@@ -460,6 +526,16 @@ app.post('/api/run', requireUser, requireAdmin, (req, res) => {
 
 // ── WebSocket — live logs ─────────────────────────────────────────────────────
 const wss = new WebSocketServer({ server, path: '/ws/logs' });
+
+// Proxy WebSocket upgrades pour les workspaces code.gamad.net
+server.on('upgrade', (req, socket, head) => {
+    const host = (req.headers.host || '').split(':')[0];
+    if (host !== 'code.gamad.net') return;
+    const port = parseCookie(req.headers.cookie, 'ws_port');
+    if (!port || !/^\d+$/.test(port)) { socket.destroy(); return; }
+    workspaceProxy.upgrade(req, socket, head);
+});
+
 wss.on('connection', (ws) => {
     const logDir = path.join(DEVLAB_ROOT, 'logs');
     if (!fs.existsSync(logDir)) { ws.close(); return; }

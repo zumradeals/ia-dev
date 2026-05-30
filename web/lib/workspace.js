@@ -38,6 +38,24 @@ const getUserEnvVars = async (userId) => {
         .map(r => `${PROVIDER_ENV_MAP[r.provider] || r.provider.toUpperCase() + '_KEY'}=${r.key_value}`);
 };
 
+const pullImage = (image) => new Promise((resolve, reject) => {
+    docker.pull(image, (err, stream) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, (pullErr) => {
+            if (pullErr) reject(pullErr);
+            else resolve();
+        });
+    });
+});
+
+const ensureImage = async (image) => {
+    try {
+        await docker.getImage(image).inspect();
+    } catch {
+        await pullImage(image);
+    }
+};
+
 const createWorkspace = async (userId) => {
     // Workspace existant ?
     const existing = await db.query(
@@ -47,22 +65,29 @@ const createWorkspace = async (userId) => {
 
     if (existing.rows.length > 0) {
         const ws = existing.rows[0];
-        if (ws.status === 'running') return ws;
 
-        // Tenter de redémarrer le conteneur existant
         if (ws.container_id) {
             try {
-                const c = docker.getContainer(ws.container_id);
-                await c.start();
-                await db.query(
-                    "UPDATE workspaces SET status = 'running' WHERE id = $1",
-                    [ws.id]
-                );
-                return { ...ws, status: 'running' };
-            } catch {
-                // Conteneur introuvable → recréer
-                await db.query('DELETE FROM workspaces WHERE id = $1', [ws.id]);
-            }
+                const c    = docker.getContainer(ws.container_id);
+                const info = await c.inspect();
+                const hasAuthNone = (info.Config?.Cmd || []).includes('--auth=none');
+
+                if (hasAuthNone) {
+                    // Config correcte : démarrer si nécessaire puis retourner
+                    if (!info.State.Running) {
+                        await c.start();
+                        await db.query(
+                            "UPDATE workspaces SET status = 'running' WHERE id = $1",
+                            [ws.id]
+                        );
+                    }
+                    return { ...ws, status: 'running' };
+                }
+                // Ancienne config sans --auth=none → stopper, supprimer, recréer
+                try { await c.stop({ t: 5 }); } catch { /* déjà arrêté */ }
+                await c.remove();
+            } catch { /* conteneur introuvable → recréer */ }
+            await db.query('DELETE FROM workspaces WHERE id = $1', [ws.id]);
         }
     }
 
@@ -71,15 +96,13 @@ const createWorkspace = async (userId) => {
     const wsPath  = path.join(WORKSPACE_BASE, String(userId));
 
     fs.mkdirSync(wsPath, { recursive: true });
+    await ensureImage(CODE_SERVER_IMAGE);
 
     const container = await docker.createContainer({
         Image: CODE_SERVER_IMAGE,
         name:  `gamadcode-${userId}`,
-        Env:   [
-            'PASSWORD=',           // désactive le mot de passe code-server
-            'SUDO_PASSWORD_HASH=', // idem sudo
-            ...envVars
-        ],
+        Cmd:   ['--bind-addr=0.0.0.0:8080', '--auth=none'],
+        Env:   envVars,
         ExposedPorts: { '8080/tcp': {} },
         HostConfig: {
             PortBindings:  { '8080/tcp': [{ HostPort: String(port) }] },
