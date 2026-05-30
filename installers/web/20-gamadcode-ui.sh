@@ -16,20 +16,56 @@ source "${DEVLAB_ROOT}/lib/state.sh"
 log_init "gamadcode-ui" "install"
 log_section "GamadCode Web UI"
 
+# ── Résoudre node/npm depuis nvm ou PATH ─────────────────────────────────────
+_resolve_node() {
+    # Source nvm si disponible (nvm installe node hors du PATH système)
+    local nvm_script="${HOME}/.nvm/nvm.sh"
+    if [[ -s "$nvm_script" ]]; then
+        # shellcheck source=/dev/null
+        source "$nvm_script"
+    fi
+
+    NODE_BIN="$(command -v node 2>/dev/null || true)"
+    NPM_BIN="$(command -v npm  2>/dev/null || true)"
+
+    if [[ -z "$NODE_BIN" ]]; then
+        log_error "Node.js introuvable — installez d'abord languages/nodejs"
+        return 1
+    fi
+    if [[ -z "$NPM_BIN" ]]; then
+        log_error "npm introuvable — vérifiez l'installation de Node.js"
+        return 1
+    fi
+
+    log_step "Node.js : $("$NODE_BIN" --version)  |  npm : $("$NPM_BIN" --version)"
+}
+
 _install_deps() {
-    command_exists node || { log_error "Node.js requis — installez d'abord languages/nodejs"; return 1; }
-    local node_ver; node_ver=$(node --version)
-    log_step "Node.js ${node_ver}"
+    _resolve_node
 
     local web_dir="${DEVLAB_ROOT}/web"
     if [[ ! -d "${web_dir}/node_modules" ]]; then
         log_step "Installation des dépendances npm…"
         cd "$web_dir"
-        npm install --omit=dev --silent
+        "$NPM_BIN" install --omit=dev --silent
         log_ok "Dépendances npm installées"
     else
         log_skip "node_modules déjà présent"
     fi
+}
+
+_create_wrapper() {
+    local wrapper="/usr/local/bin/gamadcode-start"
+    local web_dir="${DEVLAB_ROOT}/web"
+
+    cat > "$wrapper" << WRAPPER
+#!/bin/bash
+# Wrapper GamadCode UI — charge nvm puis démarre node
+[ -s "\${HOME}/.nvm/nvm.sh" ] && source "\${HOME}/.nvm/nvm.sh"
+exec node ${web_dir}/server.js
+WRAPPER
+    chmod +x "$wrapper"
+    log_step "Wrapper créé : ${wrapper}"
 }
 
 _configure_service() {
@@ -37,10 +73,18 @@ _configure_service() {
     local web_dir="${DEVLAB_ROOT}/web"
     local ui_port="${GAMADCODE_UI_PORT:-3000}"
 
+    # Recréer si le ExecStart pointe encore sur /usr/bin/node (ancienne version)
+    if [[ -f "$service_file" ]] && grep -q "ExecStart=/usr/bin/node" "$service_file"; then
+        log_step "Mise à jour du service (ancien ExecStart corrigé)…"
+        rm -f "$service_file"
+    fi
+
     if [[ -f "$service_file" ]]; then
         log_skip "Service gamadcode-ui déjà configuré"
         return 0
     fi
+
+    _create_wrapper
 
     cat > "$service_file" << EOF
 [Unit]
@@ -50,12 +94,13 @@ Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/node ${web_dir}/server.js
+ExecStart=/usr/local/bin/gamadcode-start
 WorkingDirectory=${web_dir}
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=GAMADCODE_UI_PORT=${ui_port}
+Environment=HOME=/root
 
 [Install]
 WantedBy=multi-user.target
@@ -101,7 +146,7 @@ EOF
         log_ok "Nginx proxy → ${domain} → :${ui_port}"
     else
         log_skip "GAMADCODE_DOMAIN non défini — proxy Nginx ignoré"
-        log_info "Pour configurer un domaine, ajoutez GAMADCODE_DOMAIN=votre-domaine dans config/local.env"
+        log_info "Pour un domaine, ajoutez GAMADCODE_DOMAIN=votre-domaine dans config/local.env"
     fi
 }
 
@@ -111,11 +156,11 @@ _start_service() {
         log_ok "GamadCode UI redémarré"
     else
         systemctl start gamadcode-ui 2>/dev/null || true
-        sleep 1
+        sleep 2
         if systemctl is-active --quiet gamadcode-ui 2>/dev/null; then
             log_ok "GamadCode UI démarré"
         else
-            log_warn "GamadCode UI n'a pas démarré — vérifiez : journalctl -u gamadcode-ui"
+            log_warn "Démarrage différé — vérifiez : journalctl -u gamadcode-ui -n 30"
         fi
     fi
 
@@ -125,6 +170,7 @@ _start_service() {
     if [[ -n "${GAMADCODE_DOMAIN:-}" ]]; then
         log_info "Via domaine : http://${GAMADCODE_DOMAIN}"
     fi
+    log_info "Wizard de configuration : http://${ip}:${ui_port}/setup"
 }
 
 _do_install() {
