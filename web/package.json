@@ -1,19 +1,23 @@
 {
   "name": "gamadcode-ui",
   "version": "2.0.0",
-  "description": "GamadCode — interface web de gestion du laboratoire IA",
+  "description": "GamadCode — plateforme cloud de développement IA",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "NODE_ENV=development node server.js"
+    "migrate": "node scripts/migrate.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "ws": "^8.16.0",
     "express-session": "^1.17.3",
+    "ws": "^8.16.0",
     "passport": "^0.7.0",
     "passport-github2": "^0.1.12",
-    "node-pty": "^1.0.0",
+    "pg": "^8.11.3",
+    "dockerode": "^4.0.2",
+    "nodemailer": "^6.9.7",
+    "jsonwebtoken": "^9.0.2",
+    "http-proxy-middleware": "^3.0.0",
     "systeminformation": "^5.21.22",
     "dotenv": "^16.3.1"
   },

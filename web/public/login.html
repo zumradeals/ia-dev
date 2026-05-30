@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connexion — GamadCode</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:    #0a0a14;
+    --card:  #12121f;
+    --border:#1e1e35;
+    --p:     #6366f1;
+    --p2:    #a855f7;
+    --text:  #e2e8f0;
+    --muted: #64748b;
+    --err:   #f87171;
+    --ok:    #22c55e;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+  .container { width: 100%; max-width: 420px; }
+  .logo { text-align: center; font-size: 28px; font-weight: 800; background: linear-gradient(135deg, var(--p), var(--p2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 32px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 36px 32px; }
+
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 28px; line-height: 1.5; }
+
+  label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
+  input[type=email] {
+    width: 100%; background: rgba(255,255,255,.04); border: 1px solid var(--border);
+    color: var(--text); padding: 13px 16px; border-radius: 10px; font-size: 16px; outline: none;
+    transition: border-color .2s; margin-bottom: 20px;
+  }
+  input[type=email]:focus { border-color: var(--p); }
+  input[type=email]::placeholder { color: var(--muted); }
+
+  button[type=submit] {
+    width: 100%; background: linear-gradient(135deg, var(--p), var(--p2));
+    color: #fff; padding: 14px; border-radius: 10px; border: none;
+    font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity .2s;
+  }
+  button[type=submit]:hover { opacity: .85; }
+  button[type=submit]:disabled { opacity: .5; cursor: not-allowed; }
+
+  .alert { padding: 14px 16px; border-radius: 10px; font-size: 14px; margin-bottom: 16px; display: none; }
+  .alert.error { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3); color: var(--err); }
+  .alert.success { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: var(--ok); }
+
+  /* État "email envoyé" */
+  .sent-state { display: none; text-align: center; }
+  .sent-icon { font-size: 48px; margin-bottom: 16px; }
+  .sent-state h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+  .sent-state p { color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .resend-btn { background: none; border: 1px solid var(--border); color: var(--muted); padding: 10px 20px; border-radius: 8px; font-size: 13px; cursor: pointer; margin-top: 20px; transition: border-color .2s, color .2s; }
+  .resend-btn:hover { border-color: var(--p); color: var(--p); }
+
+  .back-link { display: block; text-align: center; margin-top: 20px; color: var(--muted); font-size: 13px; }
+  .back-link a { color: var(--p); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">GamadCode</div>
+
+  <div class="card">
+    <!-- Formulaire email -->
+    <div id="form-state">
+      <h1>Connexion</h1>
+      <p class="subtitle">Entrez votre email — nous vous envoyons un lien de connexion instantané, sans mot de passe.</p>
+
+      <div class="alert error" id="err-msg"></div>
+
+      <form id="login-form" onsubmit="handleSubmit(event)">
+        <label for="email">Adresse email</label>
+        <input type="email" id="email" name="email" placeholder="vous@exemple.com" required autocomplete="email">
+        <button type="submit" id="submit-btn">Envoyer le lien de connexion</button>
+      </form>
+    </div>
+
+    <!-- État après envoi -->
+    <div id="sent-state" class="sent-state">
+      <div class="sent-icon">📬</div>
+      <h2>Vérifiez votre boîte mail</h2>
+      <p>
+        Un lien de connexion a été envoyé à<br>
+        <strong id="sent-email" style="color:#e2e8f0"></strong><br><br>
+        Cliquez sur le lien dans l'email pour vous connecter.<br>
+        Il est valable <strong style="color:#e2e8f0">15 minutes</strong>.
+      </p>
+      <p style="margin-top:16px;font-size:13px;color:#475569">
+        Pas d'email reçu ? Vérifiez vos spams.
+      </p>
+      <button class="resend-btn" onclick="reset()">← Réessayer avec un autre email</button>
+    </div>
+  </div>
+
+  <p class="back-link"><a href="/">← Retour à l'accueil</a></p>
+</div>
+
+<script>
+// Pré-remplir l'email depuis la landing page
+const params = new URLSearchParams(location.search);
+if (params.get('email')) document.getElementById('email').value = params.get('email');
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+  const btn   = document.getElementById('submit-btn');
+  const err   = document.getElementById('err-msg');
+
+  err.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Envoi en cours…';
+
+  try {
+    const res  = await fetch('/api/auth/magic-link', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+
+    document.getElementById('sent-email').textContent = email;
+    document.getElementById('form-state').style.display = 'none';
+    document.getElementById('sent-state').style.display  = 'block';
+  } catch (ex) {
+    err.textContent    = ex.message;
+    err.style.display  = 'block';
+    btn.disabled       = false;
+    btn.textContent    = 'Envoyer le lien de connexion';
+  }
+}
+
+function reset() {
+  document.getElementById('form-state').style.display = 'block';
+  document.getElementById('sent-state').style.display  = 'none';
+  document.getElementById('email').value = '';
+  document.getElementById('submit-btn').disabled = false;
+  document.getElementById('submit-btn').textContent = 'Envoyer le lien de connexion';
+}
+</script>
+</body>
+</html>
