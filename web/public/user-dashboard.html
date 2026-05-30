@@ -91,6 +91,19 @@
   }
   .key-input-row input:focus { border-color: var(--p); }
 
+  /* REPOS */
+  .repo-item { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+  .repo-left { flex:1; min-width:0; }
+  .repo-name { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .repo-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
+  .repo-badge.private { background:rgba(251,191,36,.1); color:var(--yellow); border:1px solid rgba(251,191,36,.3); }
+  .repo-badge.public  { background:rgba(34,197,94,.1);  color:var(--green);  border:1px solid rgba(34,197,94,.3);  }
+  .repo-desc { font-size:13px; color:var(--muted); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .repo-meta { font-size:12px; color:var(--muted); margin-top:6px; display:flex; align-items:center; gap:10px; }
+  .lang-dot  { width:10px; height:10px; border-radius:50%; display:inline-block; background:var(--muted); margin-right:3px; }
+  .search-input { width:100%; background:rgba(255,255,255,.04); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:8px; font-size:14px; margin-bottom:16px; outline:none; }
+  .search-input:focus { border-color:var(--p); }
+
   /* TOAST */
   #toast { position: fixed; bottom: 28px; right: 28px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; display: flex; align-items: center; gap: 10px; }
   #toast.show { transform: translateY(0); opacity: 1; }
@@ -138,6 +151,26 @@
         <div class="label">Créé le</div>
         <div class="value" id="ws-created">—</div>
       </div>
+    </div>
+  </div>
+
+  <!-- GITHUB REPOS CARD -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">🐙</span> Dépôts GitHub</div>
+      <button class="btn btn-outline" id="btn-refresh-repos" onclick="loadRepos()" style="font-size:12px;padding:6px 12px">↻</button>
+    </div>
+
+    <div id="repos-no-token" style="display:none">
+      <p style="color:var(--muted);font-size:14px">Configurez votre <strong>Token GitHub</strong> dans la section Clés API pour accéder à vos dépôts.</p>
+    </div>
+    <div id="repos-loading" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px"><span class="spinner"></span> Chargement des dépôts…</div>
+    </div>
+    <div id="repos-container" style="display:none">
+      <input class="search-input" type="text" id="repos-search" placeholder="Rechercher un dépôt…" oninput="filterRepos()">
+      <div id="repos-list"></div>
+      <p id="repos-empty" style="display:none;color:var(--muted);font-size:14px;text-align:center;padding:20px 0">Aucun dépôt trouvé</p>
     </div>
   </div>
 
@@ -243,6 +276,7 @@
 let currentUser = null;
 let wsData      = null;
 let wsInterval  = null;
+let allRepos    = [];
 
 const API = {
   async get(url)  { const r = await fetch(url); return r.json(); },
@@ -273,6 +307,7 @@ async function init() {
 
   await loadWorkspace();
   await loadKeys();
+  loadRepos();
   wsInterval = setInterval(loadWorkspace, 10000);
 }
 
@@ -374,6 +409,79 @@ async function deleteKey(provider) {
   document.getElementById('status-' + provider).classList.remove('has-key');
   document.getElementById('del-' + provider).style.display = 'none';
   toast('Clé supprimée');
+}
+
+// ── GitHub Repos ──────────────────────────────────────────────────────────────
+const LANG_COLORS = { JavaScript:'#f1e05a', TypeScript:'#3178c6', Python:'#3572A5', Rust:'#dea584', Go:'#00ADD8', Java:'#b07219', 'C++':'#f34b7d', PHP:'#4F5D95', Ruby:'#701516', Shell:'#89e051', HTML:'#e34c26', CSS:'#563d7c', Vue:'#41b883', Svelte:'#ff3e00', Kotlin:'#A97BFF', Swift:'#F05138' };
+
+async function loadRepos() {
+  document.getElementById('repos-no-token').style.display   = 'none';
+  document.getElementById('repos-loading').style.display    = 'flex';
+  document.getElementById('repos-container').style.display  = 'none';
+
+  const data = await API.get('/api/github/repos');
+
+  document.getElementById('repos-loading').style.display = 'none';
+
+  if (data.error) {
+    document.getElementById('repos-no-token').style.display = 'block';
+    return;
+  }
+
+  allRepos = data;
+  renderRepos(data);
+  document.getElementById('repos-container').style.display = 'block';
+}
+
+function filterRepos() {
+  const q = document.getElementById('repos-search').value.toLowerCase();
+  renderRepos(allRepos.filter(r => r.name.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q)));
+}
+
+function renderRepos(repos) {
+  const list  = document.getElementById('repos-list');
+  const empty = document.getElementById('repos-empty');
+  const isRunning = wsData && wsData.status === 'running';
+
+  if (!repos.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  list.innerHTML = repos.map(r => {
+    const dot   = LANG_COLORS[r.language] ? `<span class="lang-dot" style="background:${LANG_COLORS[r.language]}"></span>${r.language}` : (r.language || '');
+    const ago   = r.updated_at ? timeAgo(r.updated_at) : '';
+    const btnDisabled = isRunning ? '' : 'disabled title="Démarrez votre environnement d\'abord"';
+    return `<div class="repo-item">
+      <div class="repo-left">
+        <div class="repo-name">
+          <a href="${r.html_url}" target="_blank" style="color:var(--text)">${r.name}</a>
+          <span class="repo-badge ${r.private ? 'private' : 'public'}">${r.private ? 'Privé' : 'Public'}</span>
+        </div>
+        ${r.description ? `<div class="repo-desc">${r.description}</div>` : ''}
+        <div class="repo-meta">${dot}${dot && ago ? ' · ' : ''}${ago}</div>
+      </div>
+      <button class="btn btn-outline" style="font-size:13px;padding:7px 14px;white-space:nowrap" ${btnDisabled}
+        onclick="openRepo('${r.clone_url}','${r.name}',this)">↗ Ouvrir</button>
+    </div>`;
+  }).join('');
+}
+
+async function openRepo(cloneUrl, repoName, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  const data = await API.post('/api/workspace/open-repo', { cloneUrl, repoName });
+  btn.disabled = false;
+  btn.innerHTML = '↗ Ouvrir';
+  if (data.error) { toast(data.error, false); return; }
+  window.open(data.url, '_blank');
+}
+
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60)       return 'à l\'instant';
+  if (s < 3600)     return `il y a ${Math.floor(s/60)} min`;
+  if (s < 86400)    return `il y a ${Math.floor(s/3600)} h`;
+  if (s < 2592000)  return `il y a ${Math.floor(s/86400)} j`;
+  return new Date(iso).toLocaleDateString('fr-FR');
 }
 
 async function logout() {

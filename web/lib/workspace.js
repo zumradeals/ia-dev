@@ -98,7 +98,8 @@ const createWorkspace = async (userId) => {
     fs.mkdirSync(wsPath, { recursive: true });
     await ensureImage(CODE_SERVER_IMAGE);
 
-    const STARTUP_SCRIPT = process.env.WORKSPACE_STARTUP_SCRIPT || '/opt/gamadcode/start-workspace.sh';
+    const STARTUP_SCRIPT    = process.env.WORKSPACE_STARTUP_SCRIPT    || '/opt/gamadcode/start-workspace.sh';
+    const EXTENSIONS_CONF   = process.env.WORKSPACE_EXTENSIONS_CONF   || '/opt/gamadcode/workspace-extensions.conf';
 
     const container = await docker.createContainer({
         Image:      CODE_SERVER_IMAGE,
@@ -111,7 +112,8 @@ const createWorkspace = async (userId) => {
             PortBindings:  { '8080/tcp': [{ HostPort: String(port) }] },
             Binds: [
                 `${wsPath}:/home/coder/workspace`,
-                `${STARTUP_SCRIPT}:/entrypoint.d/gamad-setup.sh:ro`
+                `${STARTUP_SCRIPT}:/entrypoint.d/gamad-setup.sh:ro`,
+                `${EXTENSIONS_CONF}:/opt/gamadcode/extensions.conf:ro`
             ],
             RestartPolicy: { Name: 'unless-stopped' }
         }
@@ -178,4 +180,28 @@ const getWorkspaceStatus = async (userId) => {
     return ws;
 };
 
-module.exports = { createWorkspace, stopWorkspace, getWorkspaceStatus };
+const cloneRepo = async (userId, cloneUrl, repoName) => {
+    const targetPath = `/home/coder/workspace/${repoName}`;
+    const container  = docker.getContainer(`gamadcode-${userId}`);
+
+    await new Promise((resolve, reject) => {
+        container.exec({
+            Cmd: ['bash', '-c', `[ -d "${targetPath}/.git" ] || git clone --depth=1 "${cloneUrl}" "${targetPath}" 2>&1`],
+            AttachStdout: true,
+            AttachStderr: true,
+            User: 'coder'
+        }, (err, exec) => {
+            if (err) return reject(err);
+            exec.start({}, (err, stream) => {
+                if (err) return reject(err);
+                stream.resume();
+                stream.on('end', resolve);
+                stream.on('error', reject);
+            });
+        });
+    });
+
+    return targetPath;
+};
+
+module.exports = { createWorkspace, stopWorkspace, getWorkspaceStatus, cloneRepo };

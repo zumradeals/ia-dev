@@ -13,6 +13,7 @@ const si         = require('systeminformation');
 const fs         = require('fs');
 const path       = require('path');
 const http       = require('http');
+const https      = require('https');
 const crypto     = require('crypto');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
@@ -109,7 +110,9 @@ app.use((req, res, next) => {
             );
         }
         res.setHeader('Set-Cookie', `ws_port=${data.port}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=86400`);
-        return res.redirect(302, '/');
+        // Préserver les autres params (ex: ?folder=...)
+        const extra = Object.entries(req.query).filter(([k]) => k !== 'wstoken').map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+        return res.redirect(302, extra ? `/?${extra}` : '/');
     }
 
     // Cookie présent → proxy vers le workspace
@@ -321,6 +324,63 @@ app.post('/api/workspace/stop', requireUser, async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+// ── GitHub repos ──────────────────────────────────────────────────────────────
+const githubGet = (path, token) => new Promise((resolve, reject) => {
+    https.get(`https://api.github.com${path}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'GamadCode/1.0' }
+    }, (res) => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => {
+            try { resolve({ status: res.statusCode, data: JSON.parse(d) }); }
+            catch (e) { reject(e); }
+        });
+    }).on('error', reject);
+});
+
+app.get('/api/github/repos', requireUser, async (req, res) => {
+    loadLibs();
+    const userId = req.session.userId;
+    if (!userId || !db) return res.status(503).json({ error: 'Service non disponible' });
+
+    try {
+        const r = await db.query("SELECT key_value FROM api_keys WHERE user_id = $1 AND provider = 'github'", [userId]);
+        if (!r.rows.length) return res.status(404).json({ error: 'Token GitHub non configuré' });
+
+        const { status, data } = await githubGet('/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator', r.rows[0].key_value);
+        if (status !== 200) return res.status(status).json({ error: data.message || 'Erreur GitHub API' });
+
+        res.json(data.map(repo => ({
+            id: repo.id, name: repo.name, full_name: repo.full_name,
+            private: repo.private, description: repo.description,
+            language: repo.language, updated_at: repo.updated_at,
+            clone_url: repo.clone_url, html_url: repo.html_url,
+            stargazers_count: repo.stargazers_count
+        })));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/workspace/open-repo', requireUser, async (req, res) => {
+    loadLibs();
+    const userId = req.session.userId;
+    if (!userId || !workspaceLib || !db) return res.status(503).json({ error: 'Service non disponible' });
+
+    const { cloneUrl, repoName } = req.body;
+    if (!cloneUrl || !repoName) return res.status(400).json({ error: 'Paramètres manquants' });
+    if (!/^[a-zA-Z0-9._-]+$/.test(repoName)) return res.status(400).json({ error: 'Nom de dépôt invalide' });
+
+    try {
+        const ws = await workspaceLib.getWorkspaceStatus(userId);
+        if (ws.status !== 'running') return res.status(400).json({ error: 'Démarrez votre environnement d\'abord' });
+
+        const targetPath = await workspaceLib.cloneRepo(userId, cloneUrl, repoName);
+
+        const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
+        const token    = generateWsToken(ws.port);
+        res.json({ url: `https://${wsDomain}/?wstoken=${token}&folder=${encodeURIComponent(targetPath)}` });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── API Keys ──────────────────────────────────────────────────────────────────
