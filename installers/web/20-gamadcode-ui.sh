@@ -176,8 +176,45 @@ _start_service() {
     log_info "Wizard de configuration : http://${ip}:${ui_port}/setup"
 }
 
+_setup_database() {
+    local pg_user="${POSTGRES_USER:-gamadcode}"
+    local pg_pass="${POSTGRES_PASSWORD:-}"
+    local pg_db="${POSTGRES_DB:-gamadcode}"
+
+    if ! command -v psql &>/dev/null; then
+        log_warn "psql non disponible — DB skip"
+        return 0
+    fi
+
+    if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${pg_user}'" 2>/dev/null | grep -q 1; then
+        log_step "Création utilisateur PostgreSQL '${pg_user}'…"
+        sudo -u postgres psql -c "CREATE USER ${pg_user} WITH PASSWORD '${pg_pass}';" 2>/dev/null
+        log_ok "Utilisateur '${pg_user}' créé"
+    else
+        sudo -u postgres psql -c "ALTER USER ${pg_user} WITH PASSWORD '${pg_pass}';" 2>/dev/null || true
+        log_skip "Utilisateur '${pg_user}' déjà existant"
+    fi
+
+    if ! sudo -u postgres psql -lqt 2>/dev/null | cut -d\| -f1 | grep -qw "${pg_db}"; then
+        log_step "Création base '${pg_db}'…"
+        sudo -u postgres createdb -O "${pg_user}" "${pg_db}" 2>/dev/null
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${pg_db} TO ${pg_user};" 2>/dev/null
+        log_ok "Base '${pg_db}' créée"
+    else
+        log_skip "Base '${pg_db}' déjà existante"
+    fi
+
+    local nvm_script="${HOME}/.nvm/nvm.sh"
+    [[ -s "$nvm_script" ]] && source "$nvm_script"
+    if command -v node &>/dev/null; then
+        log_step "Migration de la base de données…"
+        node "${DEVLAB_ROOT}/web/scripts/migrate.js" 2>/dev/null && log_ok "Migration appliquée" || log_warn "Migration échouée — vérifiez les logs"
+    fi
+}
+
 _do_install() {
     _install_deps
+    _setup_database
     _configure_service
     _configure_nginx
     _start_service

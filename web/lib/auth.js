@@ -14,8 +14,8 @@ const generateCaptcha = () => {
     const op  = ops[Math.floor(Math.random() * ops.length)];
     let answer;
     if (op === '+') answer = a + b;
-    else if (op === '-') { answer = a + b; return { question: `${a + b} - ${b}`, answer: a }; }
-    else { answer = a * b; }
+    else if (op === '-') return { question: `${a + b} - ${b}`, answer: a };
+    else answer = a * b;
     return { question: `${a} ${op} ${b}`, answer };
 };
 
