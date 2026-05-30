@@ -52,6 +52,15 @@ if [ -f "$HOME/.npm-global/bin/claude" ] && [ ! -f "/usr/local/bin/claude" ]; th
         || echo "[gamad] ✗ symlink claude échoué"
 fi
 
+# Patch extension Claude Code : forcer Activity Bar (primary) au lieu de Secondary Sidebar
+# La Secondary Sidebar ne fonctionne pas dans code-server derrière un reverse proxy
+CLAUDE_EXT=$(find "$HOME/.local/share/code-server/extensions" -name "extension.js" -path "*/anthropic.claude-code*" 2>/dev/null | head -1)
+if [ -n "$CLAUDE_EXT" ]; then
+    sed -i 's/claudeVSCodeSidebarSecondary\.focus/claudeVSCodeSidebar.focus/g' "$CLAUDE_EXT" 2>/dev/null
+    sed -i 's/getPreferredLocation()==="sidebar"&&G)/getPreferredLocation()==="sidebar")/g' "$CLAUDE_EXT" 2>/dev/null
+    echo "[gamad] ✓ patch Claude Code (sidebar primaire)"
+fi
+
 # ── Settings VS Code (clés API + PATH npm) ──────────────────────────────────
 python3 - <<'PYEOF' 2>/dev/null && echo "[gamad] ✓ Settings VS Code"
 import json, os
@@ -92,6 +101,44 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
     git config --global user.email "${GIT_USER_EMAIL:-user@gamad.net}"
     git config --global user.name  "${GIT_USER_NAME:-GamadCode User}"
     echo "[gamad] ✓ GitHub configuré"
+fi
+
+# Config Continue (Claude + OpenAI) générée à partir des clés injectées
+if command -v python3 &>/dev/null; then
+    python3 - <<'PYEOF' 2>/dev/null && echo "[gamad] ✓ Config Continue"
+import json, os
+
+cfg_dir = os.path.expanduser("~/.continue")
+os.makedirs(cfg_dir, exist_ok=True)
+
+models, autocomplete = [], None
+
+ak = os.environ.get("ANTHROPIC_API_KEY", "")
+if ak:
+    models += [
+        {"title": "Claude Sonnet", "provider": "anthropic", "model": "claude-sonnet-4-5", "apiKey": ak},
+        {"title": "Claude Haiku",  "provider": "anthropic", "model": "claude-haiku-4-5-20251001", "apiKey": ak}
+    ]
+    autocomplete = {"title": "Claude Haiku (autocomplete)", "provider": "anthropic",
+                    "model": "claude-haiku-4-5-20251001", "apiKey": ak}
+
+ok = os.environ.get("OPENAI_API_KEY", "")
+if ok:
+    models += [{"title": "GPT-4o", "provider": "openai", "model": "gpt-4o", "apiKey": ok}]
+    if not autocomplete:
+        autocomplete = {"title": "GPT-4o-mini (autocomplete)", "provider": "openai",
+                        "model": "gpt-4o-mini", "apiKey": ok}
+
+if not models:
+    exit(0)
+
+cfg = {"models": models, "allowAnonymousTelemetry": False}
+if autocomplete:
+    cfg["tabAutocompleteModel"] = autocomplete
+
+with open(os.path.join(cfg_dir, "config.json"), "w") as f:
+    json.dump(cfg, f, indent=2)
+PYEOF
 fi
 
 touch "$MARKER"
