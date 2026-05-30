@@ -112,7 +112,9 @@ EOF
 }
 
 _configure_nginx() {
-    local domain="${GAMADCODE_DOMAIN:-}"
+    # GAMADCODE_UI_DOMAIN → domaine dédié au dashboard (ex: app.gamad.net)
+    # Fallback sur GAMADCODE_DOMAIN si UI_DOMAIN non défini
+    local domain="${GAMADCODE_UI_DOMAIN:-${GAMADCODE_DOMAIN:-}}"
     local ui_port="${GAMADCODE_UI_PORT:-3000}"
     local conf_file="/etc/nginx/conf.d/gamadcode-ui.conf"
 
@@ -139,6 +141,7 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_read_timeout 3600s;
     }
 }

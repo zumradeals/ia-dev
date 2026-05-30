@@ -32,13 +32,15 @@ const ADMIN_GITHUB_LOGIN   = process.env.ADMIN_GITHUB_LOGIN   || '';
 const app    = express();
 const server = http.createServer(app);
 
+app.set('trust proxy', 1); // fait confiance à nginx pour X-Forwarded-Proto
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }
+    cookie: { secure: 'auto', maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -116,29 +118,37 @@ app.get('/api/setup/status', (req, res) => {
 
 // ── Config URLs (résout domaine vs IP) ───────────────────────────────────────
 app.get('/api/config/urls', (req, res) => {
-    const domain    = process.env.GAMADCODE_DOMAIN || '';
-    const vscPort   = process.env.CODE_SERVER_PORT || '8080';
-    const uiPort    = process.env.GAMADCODE_UI_PORT || '3000';
+    const vscodeDomain = process.env.GAMADCODE_DOMAIN    || '';  // ex: code.gamad.net
+    const uiDomain     = process.env.GAMADCODE_UI_DOMAIN || '';  // ex: app.gamad.net
+    const vscPort      = process.env.CODE_SERVER_PORT    || '8080';
+    const uiPort       = process.env.GAMADCODE_UI_PORT   || '3000';
 
-    // Détermine le host public à partir de la requête entrante
-    const reqHost   = req.hostname; // Express strip le port
-    const isLocal   = /^(localhost|127\.|::1)/.test(reqHost);
+    // req.protocol tient compte de X-Forwarded-Proto grâce à trust proxy
+    const proto   = req.protocol || 'http';   // 'https' si certbot actif
+    const reqHost = req.hostname;
+    const isLocal = /^(localhost|127\.|::1)/.test(reqHost);
 
     let vscodeUrl, uiUrl;
-    if (domain) {
-        // Si un domaine est configuré, on l'utilise
-        vscodeUrl = `http://${domain}:${vscPort}`;
-        uiUrl     = `http://${domain}`;
+
+    // VS Code URL — domaine sans port (nginx/certbot gèrent 80/443)
+    if (vscodeDomain) {
+        vscodeUrl = `${proto}://${vscodeDomain}`;
     } else if (!isLocal) {
-        // Pas de domaine mais requête depuis IP externe → utiliser cet IP
         vscodeUrl = `http://${reqHost}:${vscPort}`;
-        uiUrl     = `http://${reqHost}:${uiPort}`;
     } else {
         vscodeUrl = `http://localhost:${vscPort}`;
-        uiUrl     = `http://localhost:${uiPort}`;
     }
 
-    res.json({ vscode: vscodeUrl, ui: uiUrl, domain, vscPort, uiPort });
+    // Dashboard URL
+    if (uiDomain) {
+        uiUrl = `${proto}://${uiDomain}`;
+    } else if (!isLocal) {
+        uiUrl = `http://${reqHost}:${uiPort}`;
+    } else {
+        uiUrl = `http://localhost:${uiPort}`;
+    }
+
+    res.json({ vscode: vscodeUrl, ui: uiUrl, vscodeDomain, uiDomain, vscPort, uiPort });
 });
 
 // ── System info ──────────────────────────────────────────────────────────────
