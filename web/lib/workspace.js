@@ -96,7 +96,7 @@ const createWorkspace = async (userId) => {
     const wsPath  = path.join(WORKSPACE_BASE, String(userId));
 
     fs.mkdirSync(wsPath, { recursive: true });
-    await ensureImage(CODE_SERVER_IMAGE);
+    await ensureImage(WORKSPACE_IMAGE);
 
     const STARTUP_SCRIPT    = process.env.WORKSPACE_STARTUP_SCRIPT    || '/opt/gamadcode/start-workspace.sh';
     const EXTENSIONS_CONF   = process.env.WORKSPACE_EXTENSIONS_CONF   || '/opt/gamadcode/workspace-extensions.conf';
