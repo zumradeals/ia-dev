@@ -71,7 +71,7 @@ const createWorkspace = async (userId) => {
                 const c    = docker.getContainer(ws.container_id);
                 const info = await c.inspect();
                 const cmd = info.Config?.Cmd || [];
-                const isUpToDate = cmd.some(c => c.includes('start-workspace'));
+                const isUpToDate = cmd.includes('--auth=none') && cmd.includes('/home/coder/workspace');
 
                 if (isUpToDate) {
                     if (!info.State.Running) {
@@ -101,16 +101,17 @@ const createWorkspace = async (userId) => {
     const STARTUP_SCRIPT = process.env.WORKSPACE_STARTUP_SCRIPT || '/opt/gamadcode/start-workspace.sh';
 
     const container = await docker.createContainer({
-        Image: CODE_SERVER_IMAGE,
-        name:  `gamadcode-${userId}`,
-        Cmd:   ['/usr/local/bin/start-workspace.sh'],
-        Env:   envVars,
+        Image:      CODE_SERVER_IMAGE,
+        name:       `gamadcode-${userId}`,
+        Entrypoint: ['/usr/bin/entrypoint.sh'],
+        Cmd:        ['--bind-addr=0.0.0.0:8080', '--auth=none', '/home/coder/workspace'],
+        Env:        envVars,
         ExposedPorts: { '8080/tcp': {} },
         HostConfig: {
             PortBindings:  { '8080/tcp': [{ HostPort: String(port) }] },
             Binds: [
                 `${wsPath}:/home/coder/workspace`,
-                `${STARTUP_SCRIPT}:/usr/local/bin/start-workspace.sh:ro`
+                `${STARTUP_SCRIPT}:/entrypoint.d/gamad-setup.sh:ro`
             ],
             RestartPolicy: { Name: 'unless-stopped' }
         }
