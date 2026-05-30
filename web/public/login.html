@@ -17,82 +17,125 @@
     --err:   #f87171;
     --ok:    #22c55e;
   }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
   .container { width: 100%; max-width: 420px; }
-  .logo { text-align: center; font-size: 28px; font-weight: 800; background: linear-gradient(135deg, var(--p), var(--p2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 32px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 36px 32px; }
 
-  h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 28px; line-height: 1.5; }
+  .logo {
+    text-align: center; font-size: 28px; font-weight: 800; margin-bottom: 28px;
+    background: linear-gradient(135deg, var(--p), var(--p2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
 
-  label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
-  input[type=email] {
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; }
+
+  /* Tabs */
+  .tabs { display: flex; background: rgba(255,255,255,.04); border-radius: 10px; padding: 4px; margin-bottom: 28px; }
+  .tab {
+    flex: 1; text-align: center; padding: 9px; border-radius: 7px; font-size: 14px;
+    font-weight: 600; cursor: pointer; color: var(--muted); transition: all .2s; border: none; background: none;
+  }
+  .tab.active { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+
+  /* Form */
+  .form-section { display: none; }
+  .form-section.active { display: block; }
+
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 7px; margin-top: 18px; }
+  label:first-of-type { margin-top: 0; }
+
+  input[type=email], input[type=password], input[type=text] {
     width: 100%; background: rgba(255,255,255,.04); border: 1px solid var(--border);
-    color: var(--text); padding: 13px 16px; border-radius: 10px; font-size: 16px; outline: none;
-    transition: border-color .2s; margin-bottom: 20px;
+    color: var(--text); padding: 12px 15px; border-radius: 9px; font-size: 15px; outline: none;
+    transition: border-color .2s;
   }
-  input[type=email]:focus { border-color: var(--p); }
-  input[type=email]::placeholder { color: var(--muted); }
+  input:focus { border-color: var(--p); }
+  input::placeholder { color: var(--muted); }
 
-  button[type=submit] {
-    width: 100%; background: linear-gradient(135deg, var(--p), var(--p2));
-    color: #fff; padding: 14px; border-radius: 10px; border: none;
-    font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity .2s;
+  .captcha-row { display: flex; gap: 10px; align-items: flex-end; }
+  .captcha-question {
+    background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.25);
+    border-radius: 9px; padding: 12px 16px; font-size: 17px; font-weight: 700;
+    color: var(--text); white-space: nowrap; flex-shrink: 0;
   }
-  button[type=submit]:hover { opacity: .85; }
-  button[type=submit]:disabled { opacity: .5; cursor: not-allowed; }
+  .captcha-row input { flex: 1; }
 
-  .alert { padding: 14px 16px; border-radius: 10px; font-size: 14px; margin-bottom: 16px; display: none; }
-  .alert.error { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3); color: var(--err); }
-  .alert.success { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: var(--ok); }
+  .password-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .strength { display: flex; gap: 4px; margin-top: 8px; }
+  .strength-bar { flex: 1; height: 3px; border-radius: 2px; background: var(--border); transition: background .3s; }
 
-  /* État "email envoyé" */
-  .sent-state { display: none; text-align: center; }
-  .sent-icon { font-size: 48px; margin-bottom: 16px; }
-  .sent-state h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
-  .sent-state p { color: var(--muted); font-size: 14px; line-height: 1.7; }
-  .resend-btn { background: none; border: 1px solid var(--border); color: var(--muted); padding: 10px 20px; border-radius: 8px; font-size: 13px; cursor: pointer; margin-top: 20px; transition: border-color .2s, color .2s; }
-  .resend-btn:hover { border-color: var(--p); color: var(--p); }
+  .btn-submit {
+    width: 100%; margin-top: 24px;
+    background: linear-gradient(135deg, var(--p), var(--p2)); color: #fff;
+    padding: 13px; border-radius: 10px; border: none; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: opacity .2s;
+  }
+  .btn-submit:hover { opacity: .85; }
+  .btn-submit:disabled { opacity: .45; cursor: not-allowed; }
 
-  .back-link { display: block; text-align: center; margin-top: 20px; color: var(--muted); font-size: 13px; }
+  .alert { display: none; padding: 12px 15px; border-radius: 9px; font-size: 14px; margin-bottom: 18px; }
+  .alert.error   { background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.3); color: var(--err); }
+  .alert.success { background: rgba(34,197,94,.08);   border: 1px solid rgba(34,197,94,.3);  color: var(--ok); }
+
+  .back-link { display: block; text-align: center; margin-top: 18px; color: var(--muted); font-size: 13px; }
   .back-link a { color: var(--p); }
 </style>
 </head>
 <body>
-
 <div class="container">
   <div class="logo">GamadCode</div>
 
   <div class="card">
-    <!-- Formulaire email -->
-    <div id="form-state">
-      <h1>Connexion</h1>
-      <p class="subtitle">Entrez votre email — nous vous envoyons un lien de connexion instantané, sans mot de passe.</p>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('login')">Connexion</button>
+      <button class="tab"        onclick="switchTab('register')">Inscription</button>
+    </div>
 
-      <div class="alert error" id="err-msg"></div>
+    <!-- ── CONNEXION ─────────────────────────────────── -->
+    <div class="form-section active" id="tab-login">
+      <div class="alert" id="err-login"></div>
+      <form onsubmit="handleLogin(event)">
+        <label>Adresse email</label>
+        <input type="email" id="l-email" placeholder="vous@exemple.com" required autocomplete="email">
 
-      <form id="login-form" onsubmit="handleSubmit(event)">
-        <label for="email">Adresse email</label>
-        <input type="email" id="email" name="email" placeholder="vous@exemple.com" required autocomplete="email">
-        <button type="submit" id="submit-btn">Envoyer le lien de connexion</button>
+        <label>Mot de passe</label>
+        <input type="password" id="l-password" placeholder="••••••••" required autocomplete="current-password">
+
+        <label>Vérification <span id="l-q" style="color:var(--text);font-weight:700;font-size:13px;text-transform:none;letter-spacing:0">…</span> = ?</label>
+        <input type="text" id="l-captcha" placeholder="Répondez" required autocomplete="off" inputmode="numeric" maxlength="4">
+
+        <button type="submit" class="btn-submit" id="btn-login">Se connecter</button>
       </form>
     </div>
 
-    <!-- État après envoi -->
-    <div id="sent-state" class="sent-state">
-      <div class="sent-icon">📬</div>
-      <h2>Vérifiez votre boîte mail</h2>
-      <p>
-        Un lien de connexion a été envoyé à<br>
-        <strong id="sent-email" style="color:#e2e8f0"></strong><br><br>
-        Cliquez sur le lien dans l'email pour vous connecter.<br>
-        Il est valable <strong style="color:#e2e8f0">15 minutes</strong>.
-      </p>
-      <p style="margin-top:16px;font-size:13px;color:#475569">
-        Pas d'email reçu ? Vérifiez vos spams.
-      </p>
-      <button class="resend-btn" onclick="reset()">← Réessayer avec un autre email</button>
+    <!-- ── INSCRIPTION ───────────────────────────────── -->
+    <div class="form-section" id="tab-register">
+      <div class="alert" id="err-register"></div>
+      <form onsubmit="handleRegister(event)">
+        <label>Adresse email</label>
+        <input type="email" id="r-email" placeholder="vous@exemple.com" required autocomplete="email">
+
+        <label>Mot de passe</label>
+        <input type="password" id="r-password" placeholder="8 caractères minimum" required autocomplete="new-password" oninput="checkStrength(this.value)">
+        <div class="strength" id="strength-bars">
+          <div class="strength-bar" id="sb1"></div>
+          <div class="strength-bar" id="sb2"></div>
+          <div class="strength-bar" id="sb3"></div>
+          <div class="strength-bar" id="sb4"></div>
+        </div>
+        <p class="password-hint" id="pw-hint">Au moins 8 caractères</p>
+
+        <label>Confirmer le mot de passe</label>
+        <input type="password" id="r-password2" placeholder="••••••••" required autocomplete="new-password">
+
+        <label>Vérification <span id="r-q" style="color:var(--text);font-weight:700;font-size:13px;text-transform:none;letter-spacing:0">…</span> = ?</label>
+        <input type="text" id="r-captcha" placeholder="Répondez" required autocomplete="off" inputmode="numeric" maxlength="4">
+
+        <button type="submit" class="btn-submit" id="btn-register">Créer mon compte</button>
+      </form>
     </div>
   </div>
 
@@ -100,46 +143,132 @@
 </div>
 
 <script>
-// Pré-remplir l'email depuis la landing page
+let captchas = { login: null, register: null };
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i === 0) === (tab === 'login')));
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+}
+
+// Pré-remplir email depuis landing
 const params = new URLSearchParams(location.search);
-if (params.get('email')) document.getElementById('email').value = params.get('email');
+if (params.get('email')) {
+  document.getElementById('l-email').value = params.get('email');
+  document.getElementById('r-email').value = params.get('email');
+}
+// Erreur de token magique → message d'info
+if (params.get('error')) {
+  showAlert('err-login', 'Session expirée ou invalide. Reconnectez-vous.', 'error');
+}
 
-async function handleSubmit(e) {
+// ── Captchas ──────────────────────────────────────────────────────────────────
+async function loadCaptcha(form) {
+  const res  = await fetch('/api/auth/captcha?form=' + form);
+  const data = await res.json();
+  captchas[form] = data.id;
+  document.getElementById((form === 'login' ? 'l' : 'r') + '-q').textContent = data.question;
+  document.getElementById((form === 'login' ? 'l' : 'r') + '-captcha').value = '';
+}
+
+loadCaptcha('login');
+loadCaptcha('register');
+
+// ── Force du mot de passe ─────────────────────────────────────────────────────
+function checkStrength(pw) {
+  let score = 0;
+  if (pw.length >= 8)  score++;
+  if (pw.length >= 12) score++;
+  if (/[0-9]/.test(pw) && /[a-zA-Z]/.test(pw)) score++;
+  if (/[^a-zA-Z0-9]/.test(pw)) score++;
+
+  const colors = ['', '#f87171', '#fbbf24', '#60a5fa', '#22c55e'];
+  const hints  = ['', 'Très faible', 'Faible', 'Moyen', 'Fort'];
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById('sb' + i).style.background = i <= score ? colors[score] : 'var(--border)';
+  }
+  document.getElementById('pw-hint').textContent = hints[score] || 'Au moins 8 caractères';
+  document.getElementById('pw-hint').style.color  = colors[score] || 'var(--muted)';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function showAlert(id, msg, type = 'error') {
+  const el = document.getElementById(id);
+  el.textContent    = msg;
+  el.className      = 'alert ' + type;
+  el.style.display  = 'block';
+}
+function hideAlert(id) { document.getElementById(id).style.display = 'none'; }
+
+// ── Connexion ─────────────────────────────────────────────────────────────────
+async function handleLogin(e) {
   e.preventDefault();
-  const email = document.getElementById('email').value.trim();
-  const btn   = document.getElementById('submit-btn');
-  const err   = document.getElementById('err-msg');
-
-  err.style.display = 'none';
-  btn.disabled = true;
-  btn.textContent = 'Envoi en cours…';
+  hideAlert('err-login');
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = 'Connexion…';
 
   try {
-    const res  = await fetch('/api/auth/magic-link', {
+    const res  = await fetch('/api/auth/login', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email })
+      body:    JSON.stringify({
+        email:    document.getElementById('l-email').value.trim(),
+        password: document.getElementById('l-password').value,
+        captchaId: captchas.login,
+        captcha:   document.getElementById('l-captcha').value.trim()
+      })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur serveur');
-
-    document.getElementById('sent-email').textContent = email;
-    document.getElementById('form-state').style.display = 'none';
-    document.getElementById('sent-state').style.display  = 'block';
-  } catch (ex) {
-    err.textContent    = ex.message;
-    err.style.display  = 'block';
-    btn.disabled       = false;
-    btn.textContent    = 'Envoyer le lien de connexion';
+    if (!res.ok) {
+      showAlert('err-login', data.error || 'Erreur serveur');
+      loadCaptcha('login');
+    } else {
+      location.href = '/my';
+    }
+  } catch {
+    showAlert('err-login', 'Erreur réseau — réessayez');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Se connecter';
   }
 }
 
-function reset() {
-  document.getElementById('form-state').style.display = 'block';
-  document.getElementById('sent-state').style.display  = 'none';
-  document.getElementById('email').value = '';
-  document.getElementById('submit-btn').disabled = false;
-  document.getElementById('submit-btn').textContent = 'Envoyer le lien de connexion';
+// ── Inscription ───────────────────────────────────────────────────────────────
+async function handleRegister(e) {
+  e.preventDefault();
+  hideAlert('err-register');
+
+  const pw  = document.getElementById('r-password').value;
+  const pw2 = document.getElementById('r-password2').value;
+  if (pw !== pw2) { showAlert('err-register', 'Les mots de passe ne correspondent pas'); return; }
+  if (pw.length < 8) { showAlert('err-register', 'Mot de passe trop court (8 caractères minimum)'); return; }
+
+  const btn = document.getElementById('btn-register');
+  btn.disabled = true; btn.textContent = 'Création…';
+
+  try {
+    const res  = await fetch('/api/auth/register', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        email:    document.getElementById('r-email').value.trim(),
+        password: pw,
+        captchaId: captchas.register,
+        captcha:   document.getElementById('r-captcha').value.trim()
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAlert('err-register', data.error || 'Erreur serveur');
+      loadCaptcha('register');
+    } else {
+      location.href = '/my';
+    }
+  } catch {
+    showAlert('err-register', 'Erreur réseau — réessayez');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Créer mon compte';
+  }
 }
 </script>
 </body>

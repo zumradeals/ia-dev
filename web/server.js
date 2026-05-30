@@ -122,43 +122,73 @@ app.get('/api/me', async (req, res) => {
     res.json({ authenticated: false, oauthConfigured: !!GITHUB_CLIENT_ID });
 });
 
-// ── Magic-link auth ──────────────────────────────────────────────────────────
-app.post('/api/auth/magic-link', async (req, res) => {
+// ── Captcha (math côté serveur, stocké en session) ────────────────────────────
+// Chaque formulaire (login / register) a son propre slot dans req.session.captchas
+app.get('/api/auth/captcha', (req, res) => {
     loadLibs();
-    if (!authLib) return res.status(503).json({ error: 'Service non disponible (base de données non configurée)' });
+    if (!authLib) return res.status(503).json({ error: 'Service non disponible' });
 
-    const { email } = req.body;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const form    = req.query.form === 'register' ? 'register' : 'login';
+    const captcha = authLib.generateCaptcha();
+    const id      = crypto.randomBytes(8).toString('hex');
+
+    if (!req.session.captchas) req.session.captchas = {};
+    req.session.captchas[id] = { answer: captcha.answer, form, expires: Date.now() + 5 * 60 * 1000 };
+
+    res.json({ id, question: captcha.question });
+});
+
+const verifyCaptcha = (req, id, answer) => {
+    const store = req.session.captchas || {};
+    const entry = store[id];
+    if (!entry) return false;
+    if (Date.now() > entry.expires) { delete store[id]; return false; }
+    const ok = String(entry.answer) === String(answer).trim();
+    delete store[id]; // usage unique
+    return ok;
+};
+
+// ── Inscription ───────────────────────────────────────────────────────────────
+app.post('/api/auth/register', async (req, res) => {
+    loadLibs();
+    if (!authLib || !db) return res.status(503).json({ error: 'Service non disponible (base de données non configurée)' });
+
+    const { email, password, captchaId, captcha } = req.body;
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
         return res.status(400).json({ error: 'Email invalide' });
-    }
-
-    const proto   = req.protocol;
-    const host    = req.get('host');
-    const baseUrl = `${proto}://${host}`;
+    if (!password || password.length < 8)
+        return res.status(400).json({ error: 'Mot de passe trop court (8 caractères minimum)' });
+    if (!verifyCaptcha(req, captchaId, captcha))
+        return res.status(400).json({ error: 'Réponse au captcha incorrecte' });
 
     try {
-        await authLib.sendMagicLink(email, baseUrl);
+        const user = await authLib.register(email, password);
+        req.session.userId    = user.id;
+        req.session.userEmail = user.email;
         res.json({ ok: true });
     } catch (e) {
-        console.error('[auth] sendMagicLink error:', e.message);
-        res.status(500).json({ error: 'Impossible d\'envoyer l\'email. Vérifiez la configuration SMTP.' });
+        res.status(400).json({ error: e.message });
     }
 });
 
-app.get('/auth/verify', async (req, res) => {
+// ── Connexion ─────────────────────────────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
     loadLibs();
-    const { token } = req.query;
-    if (!token) return res.redirect('/login?error=missing_token');
+    if (!authLib || !db) return res.status(503).json({ error: 'Service non disponible (base de données non configurée)' });
 
-    if (!authLib) return res.redirect('/login?error=service_unavailable');
+    const { email, password, captchaId, captcha } = req.body;
+
+    if (!verifyCaptcha(req, captchaId, captcha))
+        return res.status(400).json({ error: 'Réponse au captcha incorrecte' });
 
     try {
-        const user = await authLib.verifyMagicLink(token);
+        const user = await authLib.login(email, password);
         req.session.userId    = user.id;
         req.session.userEmail = user.email;
-        res.redirect('/my');
+        res.json({ ok: true });
     } catch (e) {
-        res.redirect('/login?error=invalid_token');
+        res.status(401).json({ error: e.message });
     }
 });
 
