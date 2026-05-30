@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # installers/devtools/50-code-server.sh — VS Code Server (code-server)
-# Accès VS Code dans le navigateur — lourd (~350MB), désactivé par défaut
+# Accès VS Code complet dans le navigateur sur http://VPS_IP:8080
 
 set -euo pipefail
 
@@ -17,87 +17,97 @@ source "${DEVLAB_ROOT}/lib/state.sh"
 log_init "code-server" "install"
 log_section "code-server (VS Code in browser)"
 
-DEVLAB_USER="${DEVLAB_USER:-devuser}"
+DEVLAB_USER="${DEVLAB_USER:-root}"
 USER_HOME=$(getent passwd "$DEVLAB_USER" | cut -d: -f6)
 CODE_SERVER_PORT="${CODE_SERVER_PORT:-8080}"
 CODE_SERVER_AUTH="${CODE_SERVER_AUTH:-password}"
+CODE_SERVER_CONFIG="${USER_HOME}/.config/code-server/config.yaml"
+SERVICE_NAME="code-server@${DEVLAB_USER}"
 
-_do_install() {
+_install_binary() {
     if command_exists code-server; then
-        log_skip "code-server déjà installé ($(code-server --version 2>/dev/null | head -1))"
+        log_skip "code-server binaire déjà présent ($(code-server --version 2>/dev/null | head -1))"
         return 0
     fi
-
-    log_step "Téléchargement et installation code-server..."
+    log_step "Téléchargement code-server..."
     curl -fsSL https://code-server.dev/install.sh | \
         sh -s -- --method=standalone --prefix="${USER_HOME}/.local" 2>/dev/null
-
-    chown -R "${DEVLAB_USER}:$(id -gn "$DEVLAB_USER")" "${USER_HOME}/.local" 2>/dev/null || true
     log_ok "code-server installé"
 }
 
-_configure_code_server() {
-    local config_dir="${USER_HOME}/.config/code-server"
-    local config_file="${config_dir}/config.yaml"
+_configure() {
+    local config_dir
+    config_dir=$(dirname "$CODE_SERVER_CONFIG")
+    mkdir -p "$config_dir"
 
-    if [[ -f "$config_file" ]]; then
-        log_skip "code-server config déjà présente"
+    if [[ -f "$CODE_SERVER_CONFIG" ]]; then
+        log_skip "code-server config déjà présente : ${CODE_SERVER_CONFIG}"
         return 0
     fi
 
-    mkdir -p "$config_dir"
-    chown "${DEVLAB_USER}:$(id -gn "$DEVLAB_USER")" "$config_dir"
-
-    # Générer un mot de passe aléatoire si auth=password
     local password
-    password=$(openssl rand -base64 16 2>/dev/null || dd if=/dev/urandom bs=16 count=1 2>/dev/null | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    password=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 20)
 
-    cat > "$config_file" << EOF
+    cat > "$CODE_SERVER_CONFIG" << EOF
 bind-addr: 0.0.0.0:${CODE_SERVER_PORT}
 auth: ${CODE_SERVER_AUTH}
 password: ${password}
 cert: false
+disable-telemetry: true
 EOF
-    chown "${DEVLAB_USER}:$(id -gn "$DEVLAB_USER")" "$config_file"
-    chmod 600 "$config_file"
+    chmod 600 "$CODE_SERVER_CONFIG"
 
-    log_ok "code-server configuré sur port ${CODE_SERVER_PORT}"
-    log_warn "Mot de passe généré : ${password}"
-    log_warn "Stocké dans : ${config_file} (chmod 600)"
+    log_ok "code-server configuré — port ${CODE_SERVER_PORT}"
+    log_warn "Mot de passe : ${password}"
+    log_warn "Conservé dans : ${CODE_SERVER_CONFIG}"
 }
 
-_create_systemd_service() {
-    local service_file="/etc/systemd/system/code-server@${DEVLAB_USER}.service"
+_setup_systemd() {
+    local service_file="/etc/systemd/system/${SERVICE_NAME}.service"
 
     if [[ -f "$service_file" ]]; then
-        log_skip "Service systemd code-server déjà présent"
-        return 0
-    fi
+        log_skip "Service systemd déjà présent"
+    else
+        local bin
+        bin=$(command -v code-server 2>/dev/null || echo "${USER_HOME}/.local/bin/code-server")
 
-    local code_server_bin="${USER_HOME}/.local/bin/code-server"
-    [[ ! -f "$code_server_bin" ]] && code_server_bin="$(which code-server 2>/dev/null || echo code-server)"
-
-    cat > "$service_file" << EOF
+        cat > "$service_file" << EOF
 [Unit]
-Description=code-server
+Description=code-server — VS Code in browser
 After=network.target
 
 [Service]
 Type=simple
 User=${DEVLAB_USER}
-WorkingDirectory=${USER_HOME}
-ExecStart=${code_server_bin} --config ${USER_HOME}/.config/code-server/config.yaml ${DEVLAB_ROOT}/workspace
+WorkingDirectory=${DEVLAB_ROOT}/workspace
+ExecStart=${bin} --config ${CODE_SERVER_CONFIG} ${DEVLAB_ROOT}/workspace
 Restart=on-failure
 RestartSec=5
+Environment=HOME=${USER_HOME}
+Environment=PATH=${USER_HOME}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target
 EOF
+        systemctl daemon-reload
+        systemctl enable "$SERVICE_NAME" --quiet
+        log_ok "Service systemd ${SERVICE_NAME} créé et activé"
+    fi
 
-    systemctl daemon-reload
-    systemctl enable "code-server@${DEVLAB_USER}" --quiet
-    log_ok "Service systemd code-server créé"
-    log_info "Démarrer : systemctl start code-server@${DEVLAB_USER}"
+    # Démarrer ou redémarrer
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        systemctl restart "$SERVICE_NAME"
+        log_ok "code-server redémarré"
+    else
+        systemctl start "$SERVICE_NAME"
+        log_ok "code-server démarré"
+    fi
+}
+
+_do_install() {
+    _install_binary
+    _configure
+    _setup_systemd
 }
 
 installer_run \
@@ -106,9 +116,14 @@ installer_run \
     "code-server --version 2>/dev/null | head -1" \
     "_do_install"
 
-_configure_code_server
-_create_systemd_service
-
+# Afficher les infos de connexion même si déjà installé
 echo
-log_info "Accès : http://VOTRE_IP:${CODE_SERVER_PORT}"
-log_info "Démarrer le service : systemctl start code-server@${DEVLAB_USER}"
+log_section "Accès VS Code"
+local_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+stored_password=$(grep '^password:' "$CODE_SERVER_CONFIG" 2>/dev/null | awk '{print $2}' || echo "(voir ${CODE_SERVER_CONFIG})")
+echo
+printf "  URL       : http://%s:%s\n" "${local_ip:-VOTRE_IP}" "${CODE_SERVER_PORT}"
+printf "  Mot de passe : %s\n" "${stored_password}"
+echo
+log_info "Statut : systemctl status ${SERVICE_NAME}"
+log_info "Logs   : journalctl -u ${SERVICE_NAME} -f"
