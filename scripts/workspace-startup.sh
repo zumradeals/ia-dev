@@ -47,6 +47,117 @@ if [ ! -f "$MARKER" ]; then
             || echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
     fi
 
+    # ── Extension compagnon : GamadCode Launcher ──────────────────────────────
+    # Boutons barre d'état (Claude / Codex) + auto-lancement via marqueur .gamad/autostart
+    LAUNCHER_DIR="$HOME/.openvscode-server/extensions/gamadcode-launcher"
+    mkdir -p "$LAUNCHER_DIR"
+
+    cat > "$LAUNCHER_DIR/package.json" << 'PKGEOF'
+{
+  "name": "gamadcode-launcher",
+  "displayName": "GamadCode Launcher",
+  "description": "Boutons d'accès rapide Claude / Codex + auto-lancement",
+  "version": "1.0.0",
+  "publisher": "gamadcode",
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "gamadcode.openClaude", "title": "GamadCode : Ouvrir Claude" },
+      { "command": "gamadcode.openCodex", "title": "GamadCode : Ouvrir Codex" },
+      { "command": "gamadcode.claudeInTerminal", "title": "GamadCode : Ouvrir Claude dans le terminal" }
+    ]
+  }
+}
+PKGEOF
+
+    cat > "$LAUNCHER_DIR/extension.js" << 'JSEOF'
+const vscode = require('vscode');
+const fs = require('fs');
+const path = require('path');
+
+let fallbackShown = false;
+
+function openInTerminal(name, cmd) {
+  const term = vscode.window.createTerminal(name);
+  term.show();
+  term.sendText(cmd);
+}
+
+function offerTerminalFallback() {
+  if (fallbackShown) return;
+  fallbackShown = true;
+  vscode.window.showInformationMessage(
+    'Claude est ouvert. Si le panneau reste vide, ouvrez-le dans le terminal.',
+    'Ouvrir dans le terminal'
+  ).then((choice) => {
+    if (choice === 'Ouvrir dans le terminal') openInTerminal('Claude', 'claude');
+  });
+}
+
+async function openClaude() {
+  try {
+    const cmds = await vscode.commands.getCommands(true);
+    if (cmds.includes('claudeVSCodeSidebar.focus')) {
+      await vscode.commands.executeCommand('claudeVSCodeSidebar.focus');
+      offerTerminalFallback();
+      return;
+    }
+  } catch (e) { /* fallback terminal */ }
+  openInTerminal('Claude', 'claude');
+}
+
+function activate(context) {
+  const claudeBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  claudeBtn.text = '$(sparkle) Claude';
+  claudeBtn.tooltip = 'Ouvrir Claude Code';
+  claudeBtn.command = 'gamadcode.openClaude';
+  claudeBtn.show();
+
+  const codexBtn = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+  codexBtn.text = '$(rocket) Codex';
+  codexBtn.tooltip = 'Ouvrir OpenAI Codex';
+  codexBtn.command = 'gamadcode.openCodex';
+  codexBtn.show();
+
+  context.subscriptions.push(
+    claudeBtn,
+    codexBtn,
+    vscode.commands.registerCommand('gamadcode.openClaude', () => openClaude()),
+    vscode.commands.registerCommand('gamadcode.openCodex', () => openInTerminal('Codex', 'codex')),
+    vscode.commands.registerCommand('gamadcode.claudeInTerminal', () => openInTerminal('Claude', 'claude'))
+  );
+
+  const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
+  if (!folder) return;
+  const marker = path.join(folder.uri.fsPath, '.gamad', 'autostart');
+
+  const check = () => {
+    let raw;
+    try { raw = fs.readFileSync(marker, 'utf8').trim(); } catch (e) { return; }
+    if (!raw) return;
+    const parts = raw.split(':');
+    const tool = parts[0];
+    const nonce = parts[1] || '';
+    if (nonce && nonce === context.globalState.get('lastNonce')) return;
+    context.globalState.update('lastNonce', nonce);
+    if (tool === 'claude') openClaude();
+    else if (tool === 'codex') openInTerminal('Codex', 'codex');
+    try { fs.unlinkSync(marker); } catch (e) { /* best-effort */ }
+  };
+
+  check();
+  fs.watchFile(marker, { interval: 1500 }, check);
+  context.subscriptions.push({ dispose: () => fs.unwatchFile(marker) });
+}
+
+function deactivate() {}
+module.exports = { activate, deactivate };
+JSEOF
+
+    echo "[gamad] ✓ Extension GamadCode Launcher"
+
     # Symlink claude dans PATH système → visible par l'extension VS Code
     if [ -f "$HOME/.npm-global/bin/claude" ] && [ ! -f "/usr/local/bin/claude" ]; then
         sudo ln -sf "$HOME/.npm-global/bin/claude" /usr/local/bin/claude 2>/dev/null \

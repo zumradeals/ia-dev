@@ -444,6 +444,42 @@ app.post('/api/workspace/stop', requireUser, async (req, res) => {
     }
 });
 
+// ── Lancement d'un outil IA (Claude / Codex) à l'ouverture du workspace ───────
+// Écrit un marqueur dans le volume du user ; l'extension gamadcode-launcher du
+// conteneur le lit et ouvre l'outil (webview natif, fallback terminal).
+app.post('/api/workspace/launch', requireUser, async (req, res) => {
+    loadLibs();
+    const userId = req.session.userId;
+    if (!userId || !workspaceLib) return res.status(503).json({ error: 'Service non disponible' });
+
+    const tool = req.body.tool;
+    if (!['claude', 'codex'].includes(tool)) return res.status(400).json({ error: 'Outil non supporté' });
+
+    try {
+        const ws = await workspaceLib.createWorkspace(userId);
+
+        // Volume host monté sur /home/coder/workspace dans le conteneur
+        const base     = process.env.WORKSPACE_BASE || '/opt/gamadcode/users';
+        const gamadDir = path.join(base, String(userId), '.gamad');
+        const marker   = path.join(gamadDir, 'autostart');
+        const nonce    = crypto.randomBytes(8).toString('hex');
+
+        // 0o777 / 0o666 : le marqueur est écrit par root mais lu/supprimé par
+        // l'utilisateur `coder` (uid 1000) à l'intérieur du conteneur.
+        fs.mkdirSync(gamadDir, { recursive: true });
+        fs.chmodSync(gamadDir, 0o777);
+        fs.writeFileSync(marker, `${tool}:${nonce}`);
+        fs.chmodSync(marker, 0o666);
+
+        const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
+        const token    = generateWsToken(ws.port);
+        res.json({ url: `https://${wsDomain}/?wstoken=${token}` });
+    } catch (e) {
+        console.error('[workspace] launch error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ── GitHub repos ──────────────────────────────────────────────────────────────
 const githubGet = (path, token) => new Promise((resolve, reject) => {
     https.get(`https://api.github.com${path}`, {
