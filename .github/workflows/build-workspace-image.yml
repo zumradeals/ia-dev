@@ -36,7 +36,7 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
-          IMAGE="gamad/gamadcode-workspace"
+          IMAGE="zumradeals/gamadcode-workspace"
           TAGS="${IMAGE}:latest"
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             TAGS="${TAGS},${IMAGE}:${{ github.event.inputs.tag }}"
@@ -60,8 +60,8 @@ jobs:
 
       - name: Verify branding
         run: |
-          docker pull gamad/gamadcode-workspace:latest
-          NAME=$(docker run --rm gamad/gamadcode-workspace:latest \
+          docker pull zumradeals/gamadcode-workspace:latest
+          NAME=$(docker run --rm zumradeals/gamadcode-workspace:latest \
             sh -c 'cat "$OPENVSCODE_SERVER_ROOT/product.json"' \
             | python3 -c "import json,sys; print(json.load(sys.stdin)['nameShort'])")
           echo "nameShort = $NAME"

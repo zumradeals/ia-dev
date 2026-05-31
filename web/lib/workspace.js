@@ -8,7 +8,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 const PORT_MIN           = 10000;
 const PORT_MAX           = 20000;
-const WORKSPACE_IMAGE    = process.env.WORKSPACE_IMAGE   || 'gamad/gamadcode-workspace:latest';
+const WORKSPACE_IMAGE    = process.env.WORKSPACE_IMAGE   || 'zumradeals/gamadcode-workspace:latest';
 const WORKSPACE_BASE     = process.env.WORKSPACE_BASE    || '/opt/gamadcode/users';
 
 const PROVIDER_ENV_MAP = {

@@ -3,14 +3,14 @@
 # Build et push l'image GamadCode workspace vers Docker Hub.
 #
 # Usage:
-#   ./build.sh              → build + push gamad/gamadcode-workspace:latest
+#   ./build.sh              → build + push zumradeals/gamadcode-workspace:latest
 #   ./build.sh v1.2.0       → build + push :v1.2.0 ET :latest
 #   ./build.sh --no-push    → build seulement, sans push
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="gamad/gamadcode-workspace"
+IMAGE="zumradeals/gamadcode-workspace"
 TAG="${1:-latest}"
 NO_PUSH=0
 [[ "${1:-}" == "--no-push" ]] && NO_PUSH=1 && TAG="latest"

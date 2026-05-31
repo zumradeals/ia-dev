@@ -3,7 +3,7 @@ FROM gitpod/openvscode-server:latest
 # ─────────────────────────────────────────────────────────────────────────────
 # GamadCode Workspace Image
 # Base : gitpod/openvscode-server
-# Publie sous : gamad/gamadcode-workspace:latest
+# Publie sous : zumradeals/gamadcode-workspace:latest
 # ─────────────────────────────────────────────────────────────────────────────
 
 USER root
