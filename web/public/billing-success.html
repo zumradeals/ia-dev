@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paiement réussi — GamadCode</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #06060f; color: #e2e8f0; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .card {
+    background: #0d0d1c; border: 1px solid #1a1a32; border-radius: 20px;
+    padding: 56px 48px; max-width: 480px; width: 100%; text-align: center;
+  }
+  .icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: rgba(34,197,94,.12); border: 2px solid rgba(34,197,94,.3);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 28px; font-size: 32px;
+  }
+  h1 { font-size: 26px; font-weight: 800; margin-bottom: 12px; letter-spacing: -.5px; }
+  p  { color: #64748b; font-size: 15px; line-height: 1.7; margin-bottom: 32px; }
+  .plan-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(124,58,237,.12); border: 1px solid rgba(124,58,237,.3);
+    color: #c4b5fd; padding: 8px 18px; border-radius: 999px;
+    font-size: 14px; font-weight: 700; margin-bottom: 32px;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #7c3aed; color: #fff; padding: 14px 28px;
+    border-radius: 10px; font-size: 15px; font-weight: 700;
+    text-decoration: none; transition: background .2s;
+  }
+  .btn:hover { background: #a855f7; }
+  .footer-note { font-size: 12px; color: #475569; margin-top: 20px; }
+  #plan-name { text-transform: capitalize; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">✓</div>
+  <h1>Paiement réussi !</h1>
+  <p>Votre abonnement <strong id="plan-name">Pro</strong> est maintenant actif.<br>
+  Vos ressources ont été mises à jour. Profitez de votre environnement amélioré.</p>
+  <div class="plan-badge">
+    <span>⚡</span>
+    <span id="plan-label">GamadCode Pro activé</span>
+  </div>
+  <br>
+  <a href="/my" class="btn">Accéder à mon espace →</a>
+  <p class="footer-note">Un email de confirmation vous a été envoyé. En cas de problème : contact@gamad.net</p>
+</div>
+<script>
+async function loadBilling() {
+  try {
+    const r    = await fetch('/api/billing');
+    const data = await r.json();
+    if (data.plan && data.plan !== 'free') {
+      document.getElementById('plan-name').textContent  = data.plan;
+      document.getElementById('plan-label').textContent = 'GamadCode ' + data.plan.charAt(0).toUpperCase() + data.plan.slice(1) + ' activé';
+    }
+  } catch {}
+}
+loadBilling();
+</script>
+</body>
+</html>

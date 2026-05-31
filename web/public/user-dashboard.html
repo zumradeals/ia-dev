@@ -354,12 +354,19 @@
         <span id="acct-since">—</span>
       </div>
     </div>
+    <!-- CTA upgrade (free users) -->
     <div class="upgrade-cta" id="upgrade-cta" style="display:none">
       <div>
-        <strong>Passez à Pro</strong>
-        <p>Plus de dépôts, plus de ressources, priorité de démarrage.</p>
+        <strong>Passez à Pro — 9 900 XOF/mois</strong>
+        <p>2 CPU · 1 GB RAM · 50 dépôts · démarrage prioritaire.</p>
       </div>
-      <a class="btn btn-primary btn-sm" href="mailto:contact@gamad.net?subject=Upgrade Pro">Upgrader →</a>
+      <button class="btn btn-primary btn-sm" id="btn-upgrade-pro" onclick="startCheckout('pro')">
+        Passer à Pro →
+      </button>
+    </div>
+    <!-- Abonnement actif -->
+    <div id="subscription-info" style="display:none;margin-top:16px;padding:14px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px;font-size:13px;color:var(--green)">
+      <span id="subscription-text"></span>
     </div>
   </div>
 
@@ -440,7 +447,7 @@ async function init() {
   // CTA upgrade pour les free
   if (plan === 'free') document.getElementById('upgrade-cta').style.display = 'flex';
 
-  await Promise.all([loadWorkspace(), loadKeys()]);
+  await Promise.all([loadWorkspace(), loadKeys(), loadBilling()]);
   loadRepos();
   wsInterval = setInterval(loadWorkspace, 10000);
 }
@@ -780,6 +787,42 @@ function timeAgo(iso, long = false) {
   if (s < 86400)    return `il y a ${Math.floor(s/3600)} h`;
   if (s < 2592000)  return `il y a ${Math.floor(s/86400)} j`;
   return new Date(iso).toLocaleDateString('fr-FR');
+}
+
+// ── Billing ───────────────────────────────────────────────────────────────────
+async function loadBilling() {
+  try {
+    const data = await API.get('/api/billing');
+    const upgradeCta  = document.getElementById('upgrade-cta');
+    const subInfo     = document.getElementById('subscription-info');
+    const subText     = document.getElementById('subscription-text');
+
+    if (data.plan && data.plan !== 'free' && data.status === 'active') {
+      if (upgradeCta) upgradeCta.style.display = 'none';
+      if (subInfo) {
+        const label = { pro: 'Pro', enterprise: 'Entreprise' }[data.plan] || data.plan;
+        const exp   = data.expires_at ? ' · expire le ' + new Date(data.expires_at).toLocaleDateString('fr-FR') : '';
+        subText.textContent = `✓ Abonnement ${label} actif${exp}`;
+        subInfo.style.display = 'block';
+      }
+    } else {
+      if (upgradeCta) upgradeCta.style.display = 'flex';
+    }
+  } catch {}
+}
+
+async function startCheckout(plan) {
+  const btn = document.getElementById('btn-upgrade-' + plan);
+  if (btn) { btn.disabled = true; btn.textContent = 'Chargement…'; }
+  try {
+    const data = await API.post('/api/billing/checkout', { plan });
+    if (data.error) { toast(data.error, false); return; }
+    if (data.checkout_url) window.location.href = data.checkout_url;
+  } catch (e) {
+    toast('Erreur paiement : ' + e.message, false);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Passer à Pro →'; }
+  }
 }
 
 async function logout() {

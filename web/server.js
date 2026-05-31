@@ -161,8 +161,11 @@ const workspaceProxy = createProxyMiddleware({
     }
 });
 
-// DB + Auth + Workspace (lazy — ne crash pas si pg non configuré au boot)
+// DB + Auth + Workspace + Payment (lazy — ne crash pas si pg non configuré au boot)
 let db, authLib, workspaceLib;
+let paymentLib = null;
+try { paymentLib = require('./lib/payment'); } catch (e) { console.warn('[warn] payment.js non chargé :', e.message); }
+
 const loadLibs = () => {
     if (db) return;
     try {
@@ -180,7 +183,10 @@ const server = http.createServer(app);
 
 app.set('trust proxy', 1);
 
-app.use(express.json());
+// Capture du raw body pour vérification signature webhook GeniusPay
+app.use(express.json({
+    verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); }
+}));
 app.use(express.urlencoded({ extended: false }));
 app.use(session({
     secret:            SESSION_SECRET,
@@ -576,6 +582,134 @@ app.post('/api/workspace/open-repo', requireUser, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Billing GeniusPay ─────────────────────────────────────────────────────────
+
+// POST /api/billing/checkout — crée une session de paiement GeniusPay
+app.post('/api/billing/checkout', requireUser, async (req, res) => {
+    loadLibs();
+    const userId = req.session.userId;
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Session invalide' });
+    if (!paymentLib) return res.status(503).json({ error: 'Paiement non configuré' });
+    if (!db) return res.status(503).json({ error: 'Base de données non disponible' });
+
+    const { plan } = req.body;
+    if (!['pro', 'enterprise'].includes(plan)) return res.status(400).json({ error: 'Plan invalide' });
+
+    try {
+        const user = await db.query('SELECT email, name FROM users WHERE id = $1', [userId]);
+        if (!user.rows.length) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+        const uiDomain = process.env.GAMADCODE_UI_DOMAIN || process.env.GAMADCODE_DOMAIN || `localhost:${PORT}`;
+        const proto    = uiDomain.startsWith('localhost') ? 'http' : 'https';
+
+        const session = await paymentLib.createCheckout({
+            plan,
+            userId,
+            userEmail:  user.rows[0].email,
+            userName:   user.rows[0].name,
+            successUrl: `${proto}://${uiDomain}/billing/success`,
+            errorUrl:   `${proto}://${uiDomain}/billing/error`
+        });
+
+        res.json({ checkout_url: session.checkout_url, reference: session.reference });
+    } catch (e) {
+        console.error('[billing] checkout error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /api/billing — statut d'abonnement de l'utilisateur connecté
+app.get('/api/billing', requireUser, async (req, res) => {
+    loadLibs();
+    const userId = req.session.userId;
+    if (!userId || !db) return res.json({ plan: 'free', status: 'none' });
+
+    try {
+        const sub = await db.query(
+            `SELECT s.plan, s.status, s.expires_at, s.payment_reference, s.started_at
+             FROM subscriptions s
+             WHERE s.user_id = $1 AND s.status = 'active'
+             ORDER BY s.created_at DESC LIMIT 1`,
+            [userId]
+        );
+        if (!sub.rows.length) return res.json({ plan: 'free', status: 'none' });
+
+        const s = sub.rows[0];
+        // Vérifier expiration
+        if (s.expires_at && new Date(s.expires_at) < new Date()) {
+            await db.query("UPDATE subscriptions SET status='expired' WHERE user_id=$1 AND status='active'", [userId]);
+            await db.query("UPDATE users SET plan='free' WHERE id=$1", [userId]);
+            return res.json({ plan: 'free', status: 'expired' });
+        }
+        res.json({ plan: s.plan, status: s.status, expires_at: s.expires_at, started_at: s.started_at });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /api/billing/webhook — webhook GeniusPay (signature HMAC vérifiée)
+app.post('/api/billing/webhook', async (req, res) => {
+    loadLibs();
+    if (!paymentLib || !db) return res.status(503).json({ error: 'Service non disponible' });
+
+    const signature = req.headers['x-webhook-signature'] || '';
+    const timestamp = req.headers['x-webhook-timestamp'] || '';
+    const event     = req.headers['x-webhook-event']     || req.body?.event || '';
+
+    // Vérification HMAC — rejeter si invalide
+    if (!paymentLib.verifyWebhook(req.rawBody || JSON.stringify(req.body), signature, timestamp)) {
+        console.warn('[billing] webhook signature invalide');
+        return res.status(401).json({ error: 'Signature invalide' });
+    }
+
+    const payload   = req.body;
+    const data      = payload.data || {};
+    const reference = data.reference;
+    const metadata  = data.metadata || {};
+    const userId    = parseInt(metadata.user_id, 10);
+    const plan      = metadata.plan;
+
+    // Logger tous les événements
+    try {
+        await db.query(
+            `INSERT INTO payment_events (user_id, reference, event, amount, currency, status, payload)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [userId || null, reference, event, data.amount, data.currency, data.status, JSON.stringify(payload)]
+        );
+    } catch (e) { console.error('[billing] log event error:', e.message); }
+
+    // Paiement réussi → activer l'abonnement
+    if (event === 'payment.success' && Number.isInteger(userId) && userId > 0 && plan) {
+        try {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 31); // 31 jours
+
+            // Expirer les anciens abonnements actifs
+            await db.query(
+                "UPDATE subscriptions SET status='cancelled' WHERE user_id=$1 AND status='active'",
+                [userId]
+            );
+
+            // Créer le nouvel abonnement
+            await db.query(
+                `INSERT INTO subscriptions (user_id, plan, status, payment_reference, expires_at)
+                 VALUES ($1, $2, 'active', $3, $4)`,
+                [userId, plan, reference, expiresAt]
+            );
+
+            // Mettre à jour le plan de l'utilisateur
+            await db.query('UPDATE users SET plan=$1 WHERE id=$2', [plan, userId]);
+
+            console.log(`[billing] ✓ ${plan} activé pour user ${userId} (réf: ${reference})`);
+        } catch (e) {
+            console.error('[billing] activation error:', e.message);
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
+    res.json({ received: true });
+});
+
 // ── API Keys ──────────────────────────────────────────────────────────────────
 app.get('/api/keys', requireUser, async (req, res) => {
     loadLibs();
@@ -921,7 +1055,9 @@ app.get('/dashboard', requireUser, (req, res) => res.sendFile(path.join(__dirnam
 app.get('/admin',     requireUser, requireAdmin, (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
 app.get('/modules',   requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/modules.html')));
 app.get('/logs',      requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/logs.html')));
-app.get('/setup',     (req, res)  => res.sendFile(path.join(__dirname, 'public/setup.html')));
+app.get('/setup',           (req, res)  => res.sendFile(path.join(__dirname, 'public/setup.html')));
+app.get('/billing/success', requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/billing-success.html')));
+app.get('/billing/error',   (req, res)  => res.sendFile(path.join(__dirname, 'public/billing-error.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => {
