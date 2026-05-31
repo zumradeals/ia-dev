@@ -58,17 +58,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
 
-      - name: Verify branding
-        # Inspecte le label OCI sans puller l'image entière (3+ Go)
+      - name: Verify image published
         run: |
-          NAME=$(docker buildx imagetools inspect zumradeals/gamadcode-workspace:latest \
-            --format '{{ json .Manifest }}' \
-            | python3 -c "
-import json, sys
-m = json.load(sys.stdin)
-# Le label est dans les annotations ou dans le config
-labels = m.get('annotations', {})
-print('Manifest labels:', list(labels.keys())[:5])
-" 2>/dev/null || echo "inspect ok")
-          echo "✓ Image zumradeals/gamadcode-workspace:latest publiée"
-          docker buildx imagetools inspect zumradeals/gamadcode-workspace:latest | head -10
+          docker buildx imagetools inspect zumradeals/gamadcode-workspace:latest
+          echo "✓ Image zumradeals/gamadcode-workspace:latest disponible sur Docker Hub"
