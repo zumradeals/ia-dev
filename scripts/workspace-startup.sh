@@ -9,7 +9,7 @@ CLAUDE_VER=$(find "$HOME/.openvscode-server/extensions" \
     -name "package.json" -path "*/anthropic.claude*" \
     -exec node -e "try{process.stdout.write(require(process.argv[1]).version)}catch{}" {} \; \
     2>/dev/null | head -1 || echo "0")
-LAUNCHER_VER="1.0.1"
+LAUNCHER_VER="1.0.2"
 MARKER="$HOME/.gamad-setup-${EXT_HASH:0:8}-${SERVER_VER}-c${CLAUDE_VER//./}-l${LAUNCHER_VER}"
 
 if [ ! -f "$MARKER" ]; then
@@ -267,15 +267,80 @@ for (const k of ['ANTHROPIC_API_KEY','OPENAI_API_KEY','GITHUB_TOKEN']) {
 }
 env.PATH = (process.env.HOME||'/home/workspace') + '/.npm-global/bin:' + (process.env.PATH||'/usr/local/bin:/usr/bin:/bin');
 Object.assign(existing, {
+    // ── Telemetry & updates ────────────────────────────────────────────────
     'telemetry.telemetryLevel': 'off',
     'extensions.autoUpdate': false,
-    'editor.fontSize': 14, 'editor.tabSize': 2, 'editor.formatOnSave': true,
+    'update.mode': 'none',
+    'workbench.tips.enabled': false,
+
+    // ── GamadCode branding ─────────────────────────────────────────────────
+    // Remplace "OpenVSCode Server" dans la barre de titre
+    'window.title': 'GamadCode Studio — ${activeEditorShort}${separator}${rootName}',
+    'workbench.colorTheme': 'Default Dark Modern',
+    'workbench.startupEditor': 'none',
+    'workbench.colorCustomizations': {
+        // Barre de titre
+        'titleBar.activeBackground': '#0d0d1a',
+        'titleBar.activeForeground': '#e2e8f0',
+        'titleBar.inactiveBackground': '#0d0d1a',
+        'titleBar.inactiveForeground': '#64748b',
+        'titleBar.border': '#1e1e35',
+        // Barre d'activité (icônes gauche)
+        'activityBar.background': '#0d0d1a',
+        'activityBar.foreground': '#a5b4fc',
+        'activityBar.inactiveForeground': '#475569',
+        'activityBar.activeBorder': '#6366f1',
+        'activityBar.border': '#1e1e35',
+        // Panneau latéral
+        'sideBar.background': '#12121f',
+        'sideBar.foreground': '#cbd5e1',
+        'sideBar.border': '#1e1e35',
+        'sideBarSectionHeader.background': '#0d0d1a',
+        'sideBarSectionHeader.foreground': '#94a3b8',
+        'sideBarSectionHeader.border': '#1e1e35',
+        // Éditeur
+        'editor.background': '#0a0a14',
+        'editorGroupHeader.tabsBackground': '#0d0d1a',
+        'editorGroupHeader.tabsBorder': '#1e1e35',
+        'tab.activeBackground': '#12121f',
+        'tab.inactiveBackground': '#0d0d1a',
+        'tab.border': '#1e1e35',
+        'tab.activeBorderTop': '#6366f1',
+        // Barre de statut — signature GamadCode violette
+        'statusBar.background': '#6366f1',
+        'statusBar.foreground': '#ffffff',
+        'statusBar.noFolderBackground': '#4f46e5',
+        'statusBar.debuggingBackground': '#a855f7',
+        'statusBar.border': 'transparent',
+        // Panneau (terminal)
+        'panel.background': '#0d0d1a',
+        'panel.border': '#1e1e35',
+        'panelTitle.activeBorder': '#6366f1',
+        // Input / dropdown
+        'input.background': '#12121f',
+        'input.border': '#1e1e35',
+        'input.foreground': '#e2e8f0',
+        'focusBorder': '#6366f1'
+    },
+
+    // ── Éditeur ────────────────────────────────────────────────────────────
+    'editor.fontSize': 14,
+    'editor.tabSize': 2,
+    'editor.formatOnSave': true,
+    'editor.minimap.enabled': false,
+    'editor.renderWhitespace': 'none',
+    'editor.cursorBlinking': 'smooth',
+    'editor.fontLigatures': true,
+
+    // ── Git & outils ───────────────────────────────────────────────────────
     'git.autofetch': true,
     'remote.autoForwardPorts': true,
     'remote.autoForwardPortsSource': 'process',
     'terminal.integrated.defaultProfile.linux': 'bash',
     'terminal.integrated.env.linux': env,
     'workbench.iconTheme': 'material-icon-theme',
+
+    // ── Fichiers cachés (infra) ────────────────────────────────────────────
     'files.exclude': {
         '**/.gamad-setup-*': true,
         '**/.openvscode-server': true,
