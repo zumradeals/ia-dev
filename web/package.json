@@ -8,6 +8,7 @@
     "migrate": "node scripts/migrate.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "bcryptjs": "^2.4.3",
     "dockerode": "^4.0.2",
     "dotenv": "^16.3.1",

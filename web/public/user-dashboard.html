@@ -160,6 +160,25 @@
   .btn-port-quick { font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid var(--border); background:none; color:var(--muted); cursor:pointer; transition:all .15s; }
   .btn-port-quick:hover { border-color:var(--p); color:var(--p); }
 
+  /* ONBOARDING MODAL */
+  .ob-modal { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:32px; width:100%; max-width:640px; max-height:90vh; overflow-y:auto; }
+  .ob-modal h2 { font-size:18px; font-weight:700; margin-bottom:4px; }
+  .ob-modal .sub { font-size:13px; color:var(--muted); margin-bottom:20px; }
+  .ob-section { margin-bottom:18px; }
+  .ob-section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px; }
+  .ob-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:8px; font-size:13px; font-weight:600; background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.3); color:var(--p); }
+  .ob-cmd { background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:8px; padding:10px 14px; font-family:monospace; font-size:13px; color:#a5f3fc; margin-bottom:6px; }
+  .ob-ext { display:flex; flex-wrap:wrap; gap:6px; }
+  .ob-ext-pill { font-size:11px; padding:3px 9px; border-radius:6px; background:rgba(255,255,255,.05); border:1px solid var(--border); color:var(--muted); }
+  .ob-md-preview { background:rgba(0,0,0,.3); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-family:monospace; font-size:12px; color:var(--muted); max-height:140px; overflow-y:auto; white-space:pre-wrap; }
+  .ob-source { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:3px 9px; border-radius:999px; }
+  .ob-source.claude    { background:rgba(99,102,241,.1); color:var(--p); border:1px solid rgba(99,102,241,.3); }
+  .ob-source.heuristic { background:rgba(251,191,36,.1); color:var(--yellow); border:1px solid rgba(251,191,36,.3); }
+  .ob-log { background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:8px; padding:10px 14px; font-family:monospace; font-size:12px; max-height:160px; overflow-y:auto; }
+  .ob-log-line { padding:2px 0; color:var(--muted); }
+  .ob-log-line.ok  { color:var(--green); }
+  .ob-log-line.err { color:var(--red); }
+
   /* TEMPLATE MODAL */
   .tpl-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:990; padding:24px; }
   .tpl-overlay.open { display:flex; }
@@ -523,6 +542,76 @@
 </main>
 
 <div id="toast"></div>
+
+<!-- ONBOARDING IA MODAL -->
+<div class="tpl-overlay" id="ob-overlay">
+  <div class="ob-modal">
+
+    <!-- État : analyse en cours -->
+    <div id="ob-analyzing">
+      <h2>🤖 Analyse IA en cours…</h2>
+      <div class="sub">Claude analyse la structure du dépôt pour configurer votre environnement.</div>
+      <div style="display:flex;align-items:center;gap:12px;padding:20px 0;color:var(--muted);font-size:14px">
+        <span class="spinner" style="width:20px;height:20px;border-width:3px"></span>
+        <span id="ob-analyzing-msg">Lecture des fichiers…</span>
+      </div>
+    </div>
+
+    <!-- État : résultat -->
+    <div id="ob-result" style="display:none">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px">
+        <div>
+          <h2>Configuration détectée</h2>
+          <div class="sub" id="ob-summary"></div>
+        </div>
+        <span class="ob-source" id="ob-source-badge"></span>
+      </div>
+
+      <div class="ob-section">
+        <div class="ob-section-title">Langage · Framework</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="ob-badge" id="ob-lang"></span>
+          <span class="ob-badge" id="ob-fw"></span>
+        </div>
+      </div>
+
+      <div class="ob-section" id="ob-install-section">
+        <div class="ob-section-title">Commandes d'installation</div>
+        <div id="ob-cmds"></div>
+      </div>
+
+      <div class="ob-section" id="ob-dev-section">
+        <div class="ob-section-title">Lancer le serveur de dev</div>
+        <div class="ob-cmd" id="ob-dev-cmd"></div>
+        <div style="font-size:12px;color:var(--muted)">Port <strong id="ob-dev-port"></strong> — accessible via la Preview URL</div>
+      </div>
+
+      <div class="ob-section" id="ob-ext-section" style="display:none">
+        <div class="ob-section-title">Extensions VS Code suggérées</div>
+        <div class="ob-ext" id="ob-exts"></div>
+      </div>
+
+      <div class="ob-section">
+        <div class="ob-section-title">CLAUDE.md <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(sera créé à la racine du projet)</span></div>
+        <div class="ob-md-preview" id="ob-md-preview"></div>
+      </div>
+
+      <!-- Logs après application -->
+      <div id="ob-logs-section" style="display:none;margin-bottom:18px">
+        <div class="ob-section-title">Résultat</div>
+        <div class="ob-log" id="ob-logs"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-outline" id="ob-btn-skip" onclick="skipOnboarding()">Ouvrir sans configurer</button>
+        <button class="btn btn-primary" id="ob-btn-apply" onclick="applyOnboarding()">
+          ⚡ Appliquer & Ouvrir
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <!-- TEMPLATE SELECTOR MODAL -->
 <div class="tpl-overlay" id="tpl-overlay">
@@ -1015,16 +1104,120 @@ function openRepoBtn(btn) {
 async function openRepo(cloneUrl, repoName, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
-  const win = window.open('', '_blank');
   try {
     const data = await API.post('/api/workspace/open-repo', { cloneUrl, repoName });
-    if (data.error) { if (win) win.close(); toast(data.error, false); return; }
-    if (win) win.location.href = data.url;
-    else location.href = data.url;
+    if (data.error) { toast(data.error, false); return; }
+    // Lancer l'analyse IA avant d'ouvrir le workspace
+    await startOnboarding(repoName, data.url);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '↗ Ouvrir';
   }
+}
+
+// ── Onboarding IA ─────────────────────────────────────────────────────────────
+let _obRepoName = null;
+let _obWorkspaceUrl = null;
+let _obAnalysis = null;
+
+async function startOnboarding(repoName, workspaceUrl) {
+  _obRepoName     = repoName;
+  _obWorkspaceUrl = workspaceUrl;
+  _obAnalysis     = null;
+
+  // Afficher le modal en mode "analyse en cours"
+  document.getElementById('ob-analyzing').style.display = 'block';
+  document.getElementById('ob-result').style.display    = 'none';
+  document.getElementById('ob-logs-section').style.display = 'none';
+  document.getElementById('ob-overlay').classList.add('open');
+  document.getElementById('ob-analyzing-msg').textContent = 'Lecture des fichiers du dépôt…';
+
+  try {
+    const r = await API.post('/api/workspace/analyze-repo', { repoName });
+    if (r.error) { closeOnboarding(); window.open(workspaceUrl, '_blank'); return; }
+    _obAnalysis = r;
+    showOnboardingResult(r);
+  } catch {
+    closeOnboarding();
+    window.open(workspaceUrl, '_blank');
+  }
+}
+
+function showOnboardingResult(r) {
+  document.getElementById('ob-analyzing').style.display = 'none';
+  document.getElementById('ob-result').style.display    = 'block';
+
+  document.getElementById('ob-summary').textContent     = r.summary || '';
+  document.getElementById('ob-lang').textContent        = r.language || '?';
+  document.getElementById('ob-fw').textContent          = r.framework || '?';
+
+  const src = document.getElementById('ob-source-badge');
+  src.textContent = r.source === 'claude' ? '🤖 Analysé par Claude' : '⚡ Détection auto';
+  src.className   = 'ob-source ' + (r.source === 'claude' ? 'claude' : 'heuristic');
+
+  const cmds = r.install_commands || [];
+  const installSec = document.getElementById('ob-install-section');
+  if (cmds.length) {
+    installSec.style.display = 'block';
+    document.getElementById('ob-cmds').innerHTML = cmds.map(c => `<div class="ob-cmd">${esc(c)}</div>`).join('');
+  } else { installSec.style.display = 'none'; }
+
+  const devSec = document.getElementById('ob-dev-section');
+  if (r.dev_command) {
+    devSec.style.display = 'block';
+    document.getElementById('ob-dev-cmd').textContent  = r.dev_command;
+    document.getElementById('ob-dev-port').textContent = r.dev_port || 3000;
+  } else { devSec.style.display = 'none'; }
+
+  const exts = r.extensions || [];
+  const extSec = document.getElementById('ob-ext-section');
+  if (exts.length) {
+    extSec.style.display = 'block';
+    document.getElementById('ob-exts').innerHTML = exts.map(e =>
+      `<span class="ob-ext-pill">${esc(e)}</span>`).join('');
+  } else { extSec.style.display = 'none'; }
+
+  document.getElementById('ob-md-preview').textContent = r.claude_md || '';
+}
+
+async function applyOnboarding() {
+  if (!_obAnalysis || !_obRepoName) return;
+  const btn = document.getElementById('ob-btn-apply');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Installation…';
+
+  try {
+    const r = await API.post('/api/workspace/apply-onboarding', {
+      repoName: _obRepoName, analysis: _obAnalysis
+    });
+
+    if (r.logs?.length) {
+      document.getElementById('ob-logs-section').style.display = 'block';
+      document.getElementById('ob-logs').innerHTML = r.logs.map(l => {
+        const cls = l.startsWith('✓') ? 'ok' : l.startsWith('✗') ? 'err' : '';
+        return `<div class="ob-log-line ${cls}">${esc(l)}</div>`;
+      }).join('');
+    }
+
+    if (r.error) { toast(r.error, false); return; }
+
+    btn.innerHTML = '✓ Appliqué — ouverture…';
+    setTimeout(() => {
+      closeOnboarding();
+      window.open(_obWorkspaceUrl, '_blank');
+    }, 1200);
+  } catch {
+    btn.disabled = false; btn.innerHTML = '⚡ Appliquer & Ouvrir';
+    toast('Erreur lors de l\'application', false);
+  }
+}
+
+function skipOnboarding() {
+  closeOnboarding();
+  window.open(_obWorkspaceUrl, '_blank');
+}
+
+function closeOnboarding() {
+  document.getElementById('ob-overlay').classList.remove('open');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1212,7 +1405,7 @@ async function regeneratePreviewToken(btn) {
 }
 
 init();
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTplModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeTplModal(); closeOnboarding(); } });
 </script>
 </body>
 </html>

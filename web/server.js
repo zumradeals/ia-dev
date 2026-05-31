@@ -876,7 +876,54 @@ app.post('/api/workspace/open-repo', requireUser, async (req, res) => {
 
         const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
         const token    = generateWsToken(ws.port, userId);
-        res.json({ url: `https://${wsDomain}/?wstoken=${token}&folder=${encodeURIComponent(targetPath)}` });
+        res.json({
+            url:      `https://${wsDomain}/?wstoken=${token}&folder=${encodeURIComponent(targetPath)}`,
+            repoName, targetPath,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Onboarding IA ─────────────────────────────────────────────────────────────
+let onboardingLib = null;
+const loadOnboarding = () => { if (!onboardingLib) onboardingLib = require('./lib/ai-onboarding'); };
+
+app.post('/api/workspace/analyze-repo', requireUser, async (req, res) => {
+    loadOnboarding(); loadLibs();
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+
+    const { repoName } = req.body;
+    if (!repoName || !/^[a-zA-Z0-9._-]+$/.test(repoName))
+        return res.status(400).json({ error: 'repoName invalide' });
+
+    const WORKSPACE_BASE = process.env.WORKSPACE_BASE || '/opt/gamadcode/users';
+    const repoPath = require('path').join(WORKSPACE_BASE, String(userId), repoName);
+    if (!require('fs').existsSync(repoPath))
+        return res.status(404).json({ error: 'Dépôt non trouvé dans le workspace' });
+
+    try {
+        const analysis = await onboardingLib.analyzeWithClaude(repoPath, repoName);
+        res.json(analysis);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/workspace/apply-onboarding', requireUser, async (req, res) => {
+    loadOnboarding(); loadLibs();
+    const userId = req.session.userId;
+    if (!userId || !db) return res.status(403).json({ error: 'Non connecté' });
+
+    const { repoName, analysis } = req.body;
+    if (!repoName || !analysis) return res.status(400).json({ error: 'Paramètres manquants' });
+
+    try {
+        const wsRow = await db.query('SELECT container_id, status FROM workspaces WHERE user_id=$1', [userId]);
+        if (!wsRow.rows.length || wsRow.rows[0].status !== 'running')
+            return res.status(400).json({ error: 'Workspace non démarré' });
+
+        const logs = await onboardingLib.applyOnboarding(
+            userId, repoName, analysis, wsRow.rows[0].container_id
+        );
+        res.json({ ok: true, logs });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
