@@ -9,7 +9,8 @@ CLAUDE_VER=$(find "$HOME/.openvscode-server/extensions" \
     -name "package.json" -path "*/anthropic.claude*" \
     -exec node -e "try{process.stdout.write(require(process.argv[1]).version)}catch{}" {} \; \
     2>/dev/null | head -1 || echo "0")
-MARKER="$HOME/.gamad-setup-${EXT_HASH:0:8}-${SERVER_VER}-c${CLAUDE_VER//./}"
+LAUNCHER_VER="1.0.1"
+MARKER="$HOME/.gamad-setup-${EXT_HASH:0:8}-${SERVER_VER}-c${CLAUDE_VER//./}-l${LAUNCHER_VER}"
 
 if [ ! -f "$MARKER" ]; then
     # Corriger les permissions du volume (peut être root si clonage fait en root)
@@ -138,9 +139,12 @@ function activate(context) {
     try { raw = fs.readFileSync(marker, 'utf8').trim(); } catch (e) { return; }
     if (!raw) return;
     const parts = raw.split(':');
-    const tool = parts[0];
+    const tool  = parts[0];
     const nonce = parts[1] || '';
-    if (nonce && nonce === context.globalState.get('lastNonce')) return;
+    const ts    = parseInt(parts[2] || '0', 10);
+    // Nonce vide ou marker de plus de 5 minutes → expiré, supprimer et ignorer
+    if (!nonce || Date.now() - ts > 300000) { try { fs.unlinkSync(marker); } catch {} return; }
+    if (nonce === context.globalState.get('lastNonce')) return;
     context.globalState.update('lastNonce', nonce);
     if (tool === 'claude') openClaude();
     else if (tool === 'codex') openInTerminal('Codex', 'codex');

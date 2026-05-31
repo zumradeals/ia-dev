@@ -79,7 +79,8 @@ const createWorkspace = async (userId) => {
                 const c    = docker.getContainer(ws.container_id);
                 const info = await c.inspect();
                 const image = info.Config?.Image || '';
-                const isUpToDate = image.includes('openvscode-server');
+                const isUpToDate = image.includes('openvscode-server')
+                    || image.startsWith(WORKSPACE_IMAGE.split(':')[0]);
 
                 if (isUpToDate) {
                     if (!info.State.Running) {

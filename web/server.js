@@ -450,26 +450,33 @@ app.post('/api/workspace/stop', requireUser, async (req, res) => {
 app.post('/api/workspace/launch', requireUser, async (req, res) => {
     loadLibs();
     const userId = req.session.userId;
-    if (!userId || !workspaceLib) return res.status(503).json({ error: 'Service non disponible' });
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Session invalide' });
+    if (!workspaceLib) return res.status(503).json({ error: 'Service non disponible' });
 
     const tool = req.body.tool;
     if (!['claude', 'codex'].includes(tool)) return res.status(400).json({ error: 'Outil non supporté' });
 
     try {
-        const ws = await workspaceLib.createWorkspace(userId);
+        // getWorkspaceStatus évite de recréer un workspace déjà running
+        const ws = await workspaceLib.getWorkspaceStatus(userId);
+        if (ws.status !== 'running' || !ws.port) {
+            return res.status(409).json({ error: 'Démarrez votre environnement avant de lancer un outil' });
+        }
 
-        // Volume host monté sur /home/coder/workspace dans le conteneur
+        // Volume host monté sur /home/workspace dans le conteneur (WORKSPACE_BASE/<userId> → /home/workspace)
         const base     = process.env.WORKSPACE_BASE || '/opt/gamadcode/users';
         const gamadDir = path.join(base, String(userId), '.gamad');
         const marker   = path.join(gamadDir, 'autostart');
         const nonce    = crypto.randomBytes(8).toString('hex');
 
-        // 0o777 / 0o666 : le marqueur est écrit par root mais lu/supprimé par
-        // l'utilisateur `coder` (uid 1000) à l'intérieur du conteneur.
+        // Le répertoire et le fichier sont owned par coder (uid 1000) pour
+        // que l'extension puisse supprimer le marker sans droits root.
         fs.mkdirSync(gamadDir, { recursive: true });
-        fs.chmodSync(gamadDir, 0o777);
-        fs.writeFileSync(marker, `${tool}:${nonce}`);
-        fs.chmodSync(marker, 0o666);
+        fs.chownSync(gamadDir, 1000, 1000);
+        fs.chmodSync(gamadDir, 0o755);
+        fs.writeFileSync(marker, `${tool}:${nonce}:${Date.now()}`);
+        fs.chownSync(marker, 1000, 1000);
+        fs.chmodSync(marker, 0o644);
 
         const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
         const token    = generateWsToken(ws.port);
