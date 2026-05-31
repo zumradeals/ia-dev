@@ -138,6 +138,17 @@
   .upgrade-cta strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 2px; }
 
   /* TOAST */
+  /* MÉTRIQUES */
+  .metrics-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:4px; }
+  .metric-item { background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .metric-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px; }
+  .metric-value { font-size:20px; font-weight:800; margin-bottom:6px; }
+  .metric-sub { font-size:12px; color:var(--muted); }
+  .metric-bar { height:5px; background:rgba(255,255,255,.06); border-radius:3px; overflow:hidden; margin-top:8px; }
+  .metric-bar-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--p),var(--p2)); transition:width .6s; }
+  .metric-bar-fill.warn { background:linear-gradient(90deg,#f59e0b,#ef4444); }
+  @media(max-width:480px){ .metrics-grid{grid-template-columns:1fr;} }
+
   /* SNAPSHOTS */
   .snap-list { display:flex; flex-direction:column; gap:10px; margin-top:14px; }
   .snap-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:10px; flex-wrap:wrap; }
@@ -426,6 +437,38 @@
     <p style="font-size:12px;color:var(--muted);margin-top:10px">S'applique au prochain démarrage du workspace.</p>
   </div>
 
+  <!-- MÉTRIQUES CARD -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px">
+      <span class="icon">📊</span> Utilisation ce mois
+      <span id="metrics-month" style="font-size:12px;font-weight:400;color:var(--muted);margin-left:8px"></span>
+    </div>
+    <div class="metrics-grid" id="metrics-grid">
+      <div class="metric-item">
+        <div class="metric-label">Workspace</div>
+        <div class="metric-value" id="m-hours">—</div>
+        <div class="metric-sub" id="m-hours-sub">Chargement…</div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="m-hours-bar" style="width:0%"></div></div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">Espace disque</div>
+        <div class="metric-value" id="m-disk">—</div>
+        <div class="metric-sub" id="m-disk-sub">Volume workspace</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">Snapshots</div>
+        <div class="metric-value" id="m-snaps">—</div>
+        <div class="metric-sub" id="m-snaps-sub">Chargement…</div>
+        <div class="metric-bar"><div class="metric-bar-fill" id="m-snaps-bar" style="width:0%"></div></div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">Espace snapshots</div>
+        <div class="metric-value" id="m-snap-size">—</div>
+        <div class="metric-sub">Archivé compressé</div>
+      </div>
+    </div>
+  </div>
+
   <!-- SNAPSHOTS CARD -->
   <div class="card">
     <div class="card-title" style="margin-bottom:4px"><span class="icon">💾</span> Snapshots</div>
@@ -585,7 +628,7 @@ async function init() {
   // CTA upgrade pour les free
   if (plan === 'free') document.getElementById('upgrade-cta').style.display = 'flex';
 
-  await Promise.all([loadWorkspace(), loadKeys(), loadBilling(), loadSnapshots()]);
+  await Promise.all([loadWorkspace(), loadKeys(), loadBilling(), loadSnapshots(), loadMetrics()]);
   loadRepos();
   wsInterval = setInterval(loadWorkspace, 10000);
 }
@@ -1042,6 +1085,32 @@ async function logout() {
 }
 
 // ── Snapshots ────────────────────────��───────────────────────────────────���────
+// ── Métriques ────────────────────────────────────────────────────────────────
+async function loadMetrics() {
+  const m = await API.get('/api/workspace/metrics');
+  if (m.error) return;
+
+  const el = document.getElementById('metrics-month');
+  if (el) el.textContent = m.month ? m.month.replace('-', '/') : '';
+
+  document.getElementById('m-hours').textContent = m.usedFormatted || '0 min';
+  document.getElementById('m-hours-sub').textContent =
+    m.hourLimit === -1 ? 'Illimité' : `/ ${m.hourLimitLabel} · plan ${m.plan}`;
+  const hBar = document.getElementById('m-hours-bar');
+  if (hBar) { hBar.style.width = (m.hourPct || 0) + '%'; if ((m.hourPct||0) > 80) hBar.classList.add('warn'); }
+
+  document.getElementById('m-disk').textContent = m.disk?.formatted || '—';
+
+  const snaps = m.snapshots || {};
+  document.getElementById('m-snaps').textContent = snaps.count ?? '—';
+  document.getElementById('m-snaps-sub').textContent =
+    snaps.limit === -1 ? 'Illimité' : `/ ${snaps.limitLabel} · plan ${m.plan}`;
+  const sBar = document.getElementById('m-snaps-bar');
+  if (sBar) { sBar.style.width = (snaps.pct || 0) + '%'; if ((snaps.pct||0) > 80) sBar.classList.add('warn'); }
+
+  document.getElementById('m-snap-size').textContent = snaps.sizeFormatted || '0 KB';
+}
+
 async function loadSnapshots() {
   const data = await API.get('/api/workspace/snapshots');
   renderSnapshots(Array.isArray(data) ? data : []);

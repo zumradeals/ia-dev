@@ -170,6 +170,7 @@ tbody tr:last-child { border-bottom:none; }
     <div class="nav-section">Système</div>
     <div class="nav-item" onclick="goto('system')"><span class="icon">⚙️</span> Système</div>
     <div class="nav-item" onclick="goto('snapshots')"><span class="icon">💾</span> Snapshots</div>
+    <div class="nav-item" onclick="goto('metrics')"><span class="icon">📊</span> Métriques</div>
     <div class="nav-item" onclick="goto('settings')"><span class="icon">🔧</span> Paramètres</div>
     <div class="nav-item" onclick="goto('claude')"><span class="icon">🤖</span> Claude Code</div>
     <div class="nav-item" onclick="goto('billing')"><span class="icon">💳</span> Facturation</div>
@@ -263,6 +264,28 @@ tbody tr:last-child { border-bottom:none; }
         <div class="card">
           <div class="card-title">🔧 Services</div>
           <div id="sys-services"><div class="spinner" style="margin:20px auto"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MÉTRIQUES ADMIN -->
+    <div class="section" id="section-metrics">
+      <div class="section-header">
+        <div><div class="section-title">Métriques d'usage</div><div class="section-sub">Utilisation par utilisateur — mois courant</div></div>
+        <button class="btn-primary" onclick="loadAdminMetrics()">↻ Actualiser</button>
+      </div>
+      <div class="stats" id="admin-metrics-totals" style="margin-bottom:20px"></div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Utilisateur</th><th>Plan</th><th>Workspace</th>
+              <th>Heures ce mois</th><th>Disque</th><th>Snapshots</th>
+            </tr></thead>
+            <tbody id="admin-metrics-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px"><span class="spinner"></span></td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -512,6 +535,7 @@ function goto(id) {
   if (id === 'system')     loadSystem();
   if (id === 'extensions') loadExtensions();
   if (id === 'snapshots')  loadAdminSnapshots();
+  if (id === 'metrics')    loadAdminMetrics();
   if (id === 'settings')   loadSettings();
   if (id === 'claude')     loadClaudeSettings();
   if (id === 'workspaces') renderWorkspaces(allUsers);
@@ -634,6 +658,35 @@ function renderWorkspaces(users) {
       <button class="btn-act danger" onclick="resetWs(${u.id},this)">↺ Reset</button>
     </div></td>
   </tr>`).join('');
+}
+
+// ── Métriques admin ───────────────────────────────────────────────────────────
+async function loadAdminMetrics() {
+  const data = await API.get('/api/admin/metrics');
+  if (data.error) { toast(data.error, false); return; }
+
+  const totalDisk  = data.reduce((a, u) => a + (u.diskBytes || 0), 0);
+  const totalHours = data.reduce((a, u) => a + Math.round((u.usedSeconds||0) / 3600 * 10) / 10, 0);
+  const totalSnaps = data.reduce((a, u) => a + (u.snapCount || 0), 0);
+  const fmtDisk = b => b >= 1e9 ? (b/1e9).toFixed(1)+'Go' : b >= 1e6 ? (b/1e6).toFixed(0)+'Mo' : (b/1024).toFixed(0)+'Ko';
+
+  document.getElementById('admin-metrics-totals').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Utilisateurs</div><div class="stat-value">${data.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Heures totales</div><div class="stat-value blue">${totalHours}h</div></div>
+    <div class="stat-card"><div class="stat-label">Disque total</div><div class="stat-value yellow">${fmtDisk(totalDisk)}</div></div>
+    <div class="stat-card"><div class="stat-label">Snapshots</div><div class="stat-value green">${totalSnaps}</div></div>`;
+
+  const planBadge = p => `<span class="badge ${p}">${p}</span>`;
+  const wsBadge   = s => `<span class="badge ${s||'none'}"><span class="dot"></span>${s||'—'}</span>`;
+
+  document.getElementById('admin-metrics-tbody').innerHTML = data.map(u => `<tr>
+    <td style="font-size:13px">${u.email}</td>
+    <td>${planBadge(u.plan||'free')}</td>
+    <td>${wsBadge(u.wsStatus)}</td>
+    <td style="font-family:monospace;font-size:13px">${u.usedFormatted}</td>
+    <td style="font-size:13px;color:var(--muted)">${u.diskFormatted}</td>
+    <td style="font-size:13px;color:var(--muted)">${u.snapCount} (${u.snapSizeFormatted})</td>
+  </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Aucun utilisateur</td></tr>`;
 }
 
 // ── Snapshots admin ───────────────────────────────────────────────────────────

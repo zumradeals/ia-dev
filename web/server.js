@@ -721,6 +721,26 @@ app.delete('/api/admin/snapshots/:id', requireUser, requireAdmin, async (req, re
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Métriques ─────────────────────────────────────────────────────────────────
+let metricsLib = null;
+const loadMetrics = () => { if (!metricsLib) metricsLib = require('./lib/metrics'); };
+
+app.get('/api/workspace/metrics', requireUser, async (req, res) => {
+    loadMetrics(); loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+    try { res.json(await metricsLib.getUserMetrics(userId)); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/metrics', requireUser, requireAdmin, async (req, res) => {
+    loadMetrics(); loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    try { res.json(await metricsLib.getAllMetrics()); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/workspace/start', requireUser, async (req, res) => {
     loadLibs();
     const userId = req.session.userId;

@@ -93,9 +93,12 @@ const createWorkspace = async (userId, template = 'blank') => {
                 if (isUpToDate) {
                     if (!info.State.Running) {
                         await c.start();
+                        const curMonth = new Date().toISOString().slice(0, 7);
                         await db.query(
-                            "UPDATE workspaces SET status = 'running' WHERE id = $1",
-                            [ws.id]
+                            `UPDATE workspaces SET status = 'running', session_started_at = NOW(),
+                             usage_seconds_month = CASE WHEN usage_month = $1 THEN usage_seconds_month ELSE 0 END,
+                             usage_month = $1 WHERE id = $2`,
+                            [curMonth, ws.id]
                         );
                     }
                     return { ...ws, status: 'running' };
@@ -152,10 +155,12 @@ const createWorkspace = async (userId, template = 'blank') => {
 
     const previewToken = crypto.randomBytes(24).toString('hex');
 
+    const curMonth = new Date().toISOString().slice(0, 7);
     const result = await db.query(
-        `INSERT INTO workspaces (user_id, container_id, port, status, last_activity, template, preview_token)
-         VALUES ($1, $2, $3, 'running', NOW(), $4, $5) RETURNING *`,
-        [userId, container.id, port, template, previewToken]
+        `INSERT INTO workspaces
+         (user_id, container_id, port, status, last_activity, template, preview_token, session_started_at, usage_month)
+         VALUES ($1, $2, $3, 'running', NOW(), $4, $5, NOW(), $6) RETURNING *`,
+        [userId, container.id, port, template, previewToken, curMonth]
     );
 
     return result.rows[0];
@@ -175,9 +180,19 @@ const stopWorkspace = async (userId) => {
         } catch { /* déjà arrêté */ }
     }
 
+    // Calculer et flush le temps de la session courante
+    const curMonth = new Date().toISOString().slice(0, 7);
+    const sessionSecs = ws.session_started_at
+        ? Math.floor((Date.now() - new Date(ws.session_started_at).getTime()) / 1000)
+        : 0;
+    const prevSecs = (ws.usage_month === curMonth) ? (ws.usage_seconds_month || 0) : 0;
+
     await db.query(
-        "UPDATE workspaces SET status = 'stopped' WHERE id = $1",
-        [ws.id]
+        `UPDATE workspaces
+         SET status = 'stopped', session_started_at = NULL,
+             usage_seconds_month = $1, usage_month = $2
+         WHERE id = $3`,
+        [prevSecs + sessionSecs, curMonth, ws.id]
     );
 };
 
