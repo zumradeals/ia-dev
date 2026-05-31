@@ -32,7 +32,47 @@ const GITHUB_CALLBACK_URL  = process.env.GITHUB_CALLBACK_URL  || `http://localho
 const ADMIN_GITHUB_LOGIN   = process.env.ADMIN_GITHUB_LOGIN   || '';
 
 // ── Workspace proxy helpers ───────────────────────────────────────────────────
-const wsTokenStore = new Map(); // token → { port, created }
+const wsTokenStore   = new Map(); // token → { port, created }
+const containerIPCache = new Map(); // ws_port (number) → { ip, expires }
+const portProxyCache   = new Map(); // `${ip}:${port}` → proxy instance
+
+// Résoudre l'IP interne Docker d'un conteneur via son port externe
+const resolveContainerIP = async (wsPort) => {
+    const now = Date.now();
+    const cached = containerIPCache.get(wsPort);
+    if (cached && cached.expires > now) return cached.ip;
+
+    const Docker = require('dockerode');
+    const d = new Docker({ socketPath: '/var/run/docker.sock' });
+    const containers = await d.listContainers({ filters: JSON.stringify({ status: ['running'] }) });
+    for (const c of containers) {
+        if ((c.Ports || []).some(p => p.PublicPort === wsPort)) {
+            const info = await d.getContainer(c.Id).inspect();
+            const nws  = info.NetworkSettings?.Networks || {};
+            const ip   = Object.values(nws)[0]?.IPAddress;
+            if (ip) {
+                containerIPCache.set(wsPort, { ip, expires: now + 120000 });
+                return ip;
+            }
+        }
+    }
+    return null;
+};
+
+// Proxy mis en cache par ip:port interne (HTTP + WS)
+const getPortProxy = (ip, internalPort) => {
+    const key = `${ip}:${internalPort}`;
+    if (!portProxyCache.has(key)) {
+        portProxyCache.set(key, createProxyMiddleware({
+            target:      `http://${ip}:${internalPort}`,
+            changeOrigin: true,
+            ws:           true,
+            pathRewrite: (path) => path.replace(/^\/proxy\/\d+/, '') || '/',
+            on: { error: (e, req, res) => { try { res?.status?.(502).end(); } catch {} } }
+        }));
+    }
+    return portProxyCache.get(key);
+};
 
 const generateWsToken = (port) => {
     const cutoff = Date.now() - 86400000;
@@ -115,13 +155,27 @@ app.use((req, res, next) => {
         return res.redirect(302, extra ? `/?${extra}` : '/');
     }
 
-    // Cookie présent → proxy vers le workspace
+    // Cookie présent → vérifier
     const port = parseCookie(req.headers.cookie, 'ws_port');
     if (!port || !/^\d+$/.test(port)) {
         return res.status(403).type('html').send(
             'Non autorisé. <a href="https://app.gamad.net/my">Ouvrez votre workspace depuis app.gamad.net</a>.'
         );
     }
+
+    // /proxy/:internalPort/* → proxy direct vers l'IP interne du conteneur
+    const portMatch = req.path.match(/^\/proxy\/(\d+)(\/.*)?$/);
+    if (portMatch) {
+        const internalPort = parseInt(portMatch[1]);
+        resolveContainerIP(parseInt(port))
+            .then(ip => {
+                if (!ip) return res.status(502).send('Conteneur introuvable');
+                getPortProxy(ip, internalPort)(req, res, next);
+            })
+            .catch(() => res.status(502).send('Erreur proxy interne'));
+        return;
+    }
+
     workspaceProxy(req, res, next);
 });
 
@@ -682,10 +736,24 @@ const wss = new WebSocketServer({ noServer: true });
 server.on('upgrade', (req, socket, head) => {
     const host = (req.headers.host || '').split(':')[0];
 
-    // Workspace code-server → proxy vers le conteneur Docker
+    // Workspace OpenVSCode Server → proxy vers le conteneur Docker
     if (host === 'code.gamad.net') {
-        const port = parseCookie(req.headers.cookie, 'ws_port');
-        if (!port || !/^\d+$/.test(port)) { socket.destroy(); return; }
+        const wsPort = parseCookie(req.headers.cookie, 'ws_port');
+        if (!wsPort || !/^\d+$/.test(wsPort)) { socket.destroy(); return; }
+
+        // /proxy/:internalPort/* → WS direct vers IP interne (ex: Claude Code MCP)
+        const urlPath    = (req.url || '').split('?')[0];
+        const portMatch  = urlPath.match(/^\/proxy\/(\d+)/);
+        if (portMatch) {
+            resolveContainerIP(parseInt(wsPort))
+                .then(ip => {
+                    if (!ip) { socket.destroy(); return; }
+                    getPortProxy(ip, parseInt(portMatch[1])).upgrade(req, socket, head);
+                })
+                .catch(() => socket.destroy());
+            return;
+        }
+
         workspaceProxy.upgrade(req, socket, head);
         return;
     }
