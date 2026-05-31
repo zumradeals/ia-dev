@@ -283,6 +283,9 @@ try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
 s.primaryApiKey = key;
 if (!s.hasCompletedOnboarding) s.hasCompletedOnboarding = true;
 if (!s.hasAcknowledgedCostThreshold) s.hasAcknowledgedCostThreshold = true;
+// Modèle par défaut configuré par l'admin (évite l'escalade 1M context)
+const defaultModel = process.env.CLAUDE_DEFAULT_MODEL;
+if (defaultModel) s.model = defaultModel;
 fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(f, JSON.stringify(s, null, 2), { mode: 0o600 });
 JSEOF

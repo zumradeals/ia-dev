@@ -152,6 +152,7 @@ tbody tr:last-child { border-bottom:none; }
     <div class="nav-item" onclick="goto('extensions')"><span class="icon">🧩</span> Extensions</div>
     <div class="nav-section">Système</div>
     <div class="nav-item" onclick="goto('system')"><span class="icon">⚙️</span> Système</div>
+    <div class="nav-item" onclick="goto('claude')"><span class="icon">🤖</span> Claude Code</div>
     <div class="nav-item" onclick="goto('billing')"><span class="icon">💳</span> Facturation</div>
   </nav>
 
@@ -247,6 +248,54 @@ tbody tr:last-child { border-bottom:none; }
       </div>
     </div>
 
+    <!-- CLAUDE CODE -->
+    <div class="section" id="section-claude">
+      <div class="section-header">
+        <div><div class="section-title">Claude Code</div><div class="section-sub">Configuration par défaut pour tous les workspaces utilisateurs</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🤖 Modèle par défaut</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:20px">
+          Le modèle sélectionné est injecté dans <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">~/.claude/settings.json</code> à chaque démarrage de workspace.<br>
+          Utiliser un modèle <strong>standard</strong> évite l'erreur <em>«&nbsp;Usage credits required for 1M context&nbsp;»</em> sur les abonnements Claude Pro.
+        </p>
+        <div style="margin-bottom:20px">
+          <label style="font-size:13px;font-weight:600;color:var(--muted);display:block;margin-bottom:8px">Modèle Claude Code</label>
+          <select id="claude-model-select" style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:9px;font-size:14px;outline:none;width:100%;max-width:480px;cursor:pointer">
+            <option value="">Chargement…</option>
+          </select>
+        </div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:13px;font-weight:600;color:var(--muted);display:block;margin-bottom:8px">Auto-sleep — inactivité (minutes)</label>
+          <input type="number" id="claude-idle-input" min="5" max="1440" value="30"
+            style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:9px;font-size:14px;outline:none;width:140px">
+          <span style="font-size:12px;color:var(--muted);margin-left:10px">Min 5 — Max 1440 (24h). 0 = désactivé.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn-primary" onclick="saveClaudeSettings()">💾 Sauvegarder</button>
+          <button class="btn-sm" onclick="loadClaudeSettings()">↻ Recharger</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:16px">
+          ⚠️ Le modèle s'applique aux workspaces au prochain démarrage. L'auto-sleep est actif immédiatement.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">ℹ️ Référence des modèles</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Modèle</th><th>Contexte</th><th>Usage</th></tr></thead>
+            <tbody>
+              <tr><td><code style="font-size:12px">claude-sonnet-4-6</code></td><td>~200K tokens</td><td>Équilibre performance/coût — <strong>recommandé</strong></td></tr>
+              <tr><td><code style="font-size:12px">claude-opus-4-8</code></td><td>~200K tokens</td><td>Le plus puissant, contexte standard</td></tr>
+              <tr><td><code style="font-size:12px">claude-haiku-4-5-20251001</code></td><td>~200K tokens</td><td>Rapide, léger, économique</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- FACTURATION -->
     <div class="section" id="section-billing">
       <div class="coming-soon">
@@ -288,7 +337,7 @@ function goto(id) {
   document.getElementById(`section-${id}`).classList.add('active');
   if (id === 'system')     loadSystem();
   if (id === 'extensions') loadExtensions();
-  if (id === 'workspaces') renderWorkspaces(allUsers);
+  if (id === 'claude')     loadClaudeSettings();
   if (id === 'workspaces') renderWorkspaces(allUsers);
 }
 
@@ -512,6 +561,25 @@ async function saveExtensions() {
   if (r.error) { toast(r.error, false); return; }
   renderCatalogue(content);
   toast('Extensions sauvegardées');
+}
+
+// ── Claude Code ───────────────────────────────────────────────────────────────
+async function loadClaudeSettings() {
+  const r = await API.get('/api/admin/claude-settings');
+  if (r.error) { toast(r.error, false); return; }
+  const sel = document.getElementById('claude-model-select');
+  sel.innerHTML = r.models.map(m =>
+    `<option value="${m.value}" ${m.value === r.model ? 'selected' : ''}>${m.label}</option>`
+  ).join('');
+  document.getElementById('claude-idle-input').value = r.idleMinutes ?? 30;
+}
+
+async function saveClaudeSettings() {
+  const model       = document.getElementById('claude-model-select').value;
+  const idleMinutes = parseInt(document.getElementById('claude-idle-input').value, 10);
+  const r = await API.put('/api/admin/claude-settings', { model, idleMinutes });
+  if (r.error) { toast(r.error, false); return; }
+  toast('Paramètres Claude Code sauvegardés');
 }
 
 // ── Système ───────────────────────────────────────────────────────────────────

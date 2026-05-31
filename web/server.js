@@ -34,6 +34,7 @@ const ADMIN_GITHUB_LOGIN   = process.env.ADMIN_GITHUB_LOGIN   || '';
 // ── Workspace proxy helpers ───────────────────────────────────────────────────
 const wsTokenStore     = new Map(); // token → { port, userId, created }
 const containerIPCache = new Map(); // port (number) → { ip, expires }
+const activityCache    = new Map(); // userId → last DB write timestamp (debounce)
 
 // Résoudre l'IP interne Docker d'un conteneur via son port externe
 const resolveContainerIP = async (wsPort) => {
@@ -177,6 +178,25 @@ const loadLibs = () => {
     }
 };
 
+// ── Auto-sleep des workspaces inactifs ───────────────────────────────────────
+// Vérifie toutes les 2 min ; stoppe les workspaces sans activité depuis WORKSPACE_IDLE_MINUTES
+setInterval(async () => {
+    const idleMin = parseInt(process.env.WORKSPACE_IDLE_MINUTES || '30', 10);
+    if (!db || !workspaceLib || isNaN(idleMin) || idleMin <= 0) return;
+    try {
+        const r = await db.query(
+            `SELECT user_id FROM workspaces
+             WHERE status = 'running'
+             AND last_activity < NOW() - ($1 * INTERVAL '1 minute')`,
+            [idleMin]
+        );
+        for (const row of r.rows) {
+            workspaceLib.stopWorkspace(row.user_id).catch(() => {});
+            console.log(`[auto-sleep] workspace user ${row.user_id} arrêté (inactif > ${idleMin} min)`);
+        }
+    } catch { /* silencieux */ }
+}, 2 * 60 * 1000);
+
 // ── Express ──────────────────────────────────────────────────────────────────
 const app    = express();
 const server = http.createServer(app);
@@ -269,6 +289,17 @@ app.use((req, res, next) => {
         return;
     }
 
+    // Mettre à jour last_activity (au plus 1 écriture/min par user)
+    if (verified.userId && db) {
+        const now = Date.now();
+        const last = activityCache.get(verified.userId) || 0;
+        if (now - last > 60_000) {
+            activityCache.set(verified.userId, now);
+            db.query("UPDATE workspaces SET last_activity = NOW() WHERE user_id = $1", [verified.userId])
+              .catch(() => {});
+        }
+    }
+
     workspaceProxy(req, res, next);
 });
 
@@ -322,10 +353,10 @@ app.get('/api/me', async (req, res) => {
         loadLibs();
         if (!db) return res.json({ authenticated: true, type: 'user', email: req.session.userEmail });
         try {
-            const r = await db.query('SELECT id, email, name, is_admin, plan, created_at FROM users WHERE id = $1', [req.session.userId]);
+            const r = await db.query('SELECT id, email, name, is_admin, plan, claude_model, created_at FROM users WHERE id = $1', [req.session.userId]);
             if (!r.rows.length) { req.session.destroy(); return res.json({ authenticated: false }); }
             const u = r.rows[0];
-            return res.json({ authenticated: true, type: 'user', userId: u.id, email: u.email, name: u.name, isAdmin: u.is_admin, plan: u.plan || 'free', createdAt: u.created_at });
+            return res.json({ authenticated: true, type: 'user', userId: u.id, email: u.email, name: u.name, isAdmin: u.is_admin, plan: u.plan || 'free', claudeModel: u.claude_model || null, createdAt: u.created_at });
         } catch (e) {
             return res.json({ authenticated: true, type: 'user', email: req.session.userEmail });
         }
@@ -335,6 +366,21 @@ app.get('/api/me', async (req, res) => {
         return res.json({ authenticated: true, type: 'admin', name: 'root', login: 'root', isAdmin: true, oauthConfigured: false });
     }
     res.json({ authenticated: false, oauthConfigured: !!GITHUB_CLIENT_ID });
+});
+
+// ── Modèle Claude utilisateur (user → son propre choix) ──────────────────────
+app.put('/api/me/model', requireUser, async (req, res) => {
+    loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non autorisé' });
+    const { model } = req.body;
+    const ALLOWED = ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001', null, ''];
+    if (!ALLOWED.includes(model)) return res.status(400).json({ error: 'Modèle invalide' });
+    try {
+        await db.query('UPDATE users SET claude_model = $1 WHERE id = $2', [model || null, userId]);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Captcha (math côté serveur, stocké en session) ────────────────────────────
@@ -969,6 +1015,52 @@ app.post('/api/admin/users/:id/workspace/reset', requireUser, requireAdmin, asyn
             try { await d.getContainer(ws.rows[0].container_id).remove({ force: true }); } catch {}
         }
         await db.query('DELETE FROM workspaces WHERE user_id=$1', [req.params.id]);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin : Claude Code settings ──────────────────────────────────────────────
+const LOCAL_ENV_PATH = path.join(DEVLAB_ROOT, 'config/local.env');
+
+const CLAUDE_MODELS = [
+    { value: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6 (standard — recommandé)' },
+    { value: 'claude-opus-4-8',            label: 'Claude Opus 4.8 (puissant, contexte standard)' },
+    { value: 'claude-haiku-4-5-20251001',  label: 'Claude Haiku 4.5 (rapide, léger)' },
+];
+
+app.get('/api/admin/claude-settings', requireUser, requireAdmin, (req, res) => {
+    try {
+        const content = fs.existsSync(LOCAL_ENV_PATH) ? fs.readFileSync(LOCAL_ENV_PATH, 'utf8') : '';
+        const modelMatch = content.match(/^CLAUDE_DEFAULT_MODEL="?([^"\n]+)"?/m);
+        const idleMatch  = content.match(/^WORKSPACE_IDLE_MINUTES="?(\d+)"?/m);
+        res.json({
+            model:        modelMatch ? modelMatch[1] : (process.env.CLAUDE_DEFAULT_MODEL || 'claude-sonnet-4-6'),
+            idleMinutes:  idleMatch  ? parseInt(idleMatch[1], 10) : parseInt(process.env.WORKSPACE_IDLE_MINUTES || '30', 10),
+            models: CLAUDE_MODELS,
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/claude-settings', requireUser, requireAdmin, (req, res) => {
+    const { model, idleMinutes } = req.body;
+    if (model !== undefined && !CLAUDE_MODELS.some(m => m.value === model))
+        return res.status(400).json({ error: 'Modèle invalide' });
+    if (idleMinutes !== undefined) {
+        const n = parseInt(idleMinutes, 10);
+        if (isNaN(n) || n < 5 || n > 1440) return res.status(400).json({ error: 'idleMinutes doit être entre 5 et 1440' });
+    }
+    try {
+        let content = fs.existsSync(LOCAL_ENV_PATH) ? fs.readFileSync(LOCAL_ENV_PATH, 'utf8') : '';
+        const setEnv = (key, val) => {
+            if (new RegExp(`^${key}=`, 'm').test(content)) {
+                content = content.replace(new RegExp(`^${key}=.*`, 'm'), `${key}="${val}"`);
+            } else {
+                content = content.trimEnd() + `\n${key}="${val}"\n`;
+            }
+        };
+        if (model !== undefined)      { setEnv('CLAUDE_DEFAULT_MODEL', model); process.env.CLAUDE_DEFAULT_MODEL = model; }
+        if (idleMinutes !== undefined) { setEnv('WORKSPACE_IDLE_MINUTES', idleMinutes); process.env.WORKSPACE_IDLE_MINUTES = String(idleMinutes); }
+        fs.writeFileSync(LOCAL_ENV_PATH, content, 'utf8');
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });

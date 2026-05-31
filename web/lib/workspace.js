@@ -29,19 +29,23 @@ const getNextPort = async () => {
 };
 
 const getUserEnvVars = async (userId) => {
-    const result = await db.query(
-        'SELECT provider, key_value FROM api_keys WHERE user_id = $1',
-        [userId]
-    );
-    const vars = result.rows
+    const [keysResult, userResult] = await Promise.all([
+        db.query('SELECT provider, key_value FROM api_keys WHERE user_id = $1', [userId]),
+        db.query('SELECT claude_model FROM users WHERE id = $1', [userId]),
+    ]);
+
+    const vars = keysResult.rows
         .filter(r => r.key_value)
         .map(r => `${PROVIDER_ENV_MAP[r.provider] || r.provider.toUpperCase() + '_KEY'}=${r.key_value}`);
 
-    // Fallback : si pas de clé anthropic en DB, utiliser celle du serveur
-    const hasAnthropic = result.rows.some(r => r.provider === 'anthropic' && r.key_value);
+    const hasAnthropic = keysResult.rows.some(r => r.provider === 'anthropic' && r.key_value);
     if (!hasAnthropic && process.env.ANTHROPIC_API_KEY) {
         vars.push(`ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`);
     }
+
+    // Modèle : choix utilisateur > défaut admin > rien
+    const claudeModel = userResult.rows[0]?.claude_model || process.env.CLAUDE_DEFAULT_MODEL;
+    if (claudeModel) vars.push(`CLAUDE_DEFAULT_MODEL=${claudeModel}`);
 
     return vars;
 };
@@ -100,17 +104,24 @@ const createWorkspace = async (userId) => {
         }
     }
 
-    const port    = await getNextPort();
-    const envVars = await getUserEnvVars(userId);
-    const wsPath  = path.join(WORKSPACE_BASE, String(userId));
+    const port     = await getNextPort();
+    const envVars  = await getUserEnvVars(userId);
+    const wsPath   = path.join(WORKSPACE_BASE, String(userId));
+
+    // Limites de ressources selon le plan de l'utilisateur
+    const planRow = await db.query(
+        `SELECT p.cpu_limit, p.ram_limit FROM users u
+         LEFT JOIN plans p ON p.name = COALESCE(u.plan, 'free')
+         WHERE u.id = $1`, [userId]
+    );
+    const { cpu_limit = 1.0, ram_limit = 512 } = planRow.rows[0] || {};
 
     fs.mkdirSync(wsPath, { recursive: true });
-    // Le user openvscode-server a uid/gid 1000 — le volume doit lui appartenir
     try { fs.chownSync(wsPath, 1000, 1000); } catch {}
     await ensureImage(WORKSPACE_IMAGE);
 
-    const STARTUP_SCRIPT    = process.env.WORKSPACE_STARTUP_SCRIPT    || '/opt/gamadcode/start-workspace.sh';
-    const EXTENSIONS_CONF   = process.env.WORKSPACE_EXTENSIONS_CONF   || '/opt/gamadcode/workspace-extensions.conf';
+    const STARTUP_SCRIPT  = process.env.WORKSPACE_STARTUP_SCRIPT  || '/opt/gamadcode/start-workspace.sh';
+    const EXTENSIONS_CONF = process.env.WORKSPACE_EXTENSIONS_CONF || '/opt/gamadcode/workspace-extensions.conf';
 
     const container = await docker.createContainer({
         Image:      WORKSPACE_IMAGE,
@@ -126,15 +137,17 @@ const createWorkspace = async (userId) => {
                 `${STARTUP_SCRIPT}:/gamad-startup.sh:ro`,
                 `${EXTENSIONS_CONF}:/opt/gamadcode/extensions.conf:ro`
             ],
-            RestartPolicy: { Name: 'unless-stopped' }
+            RestartPolicy: { Name: 'unless-stopped' },
+            NanoCPUs: Math.round(cpu_limit * 1e9),
+            Memory:   ram_limit * 1024 * 1024,
         }
     });
 
     await container.start();
 
     const result = await db.query(
-        `INSERT INTO workspaces (user_id, container_id, port, status)
-         VALUES ($1, $2, $3, 'running') RETURNING *`,
+        `INSERT INTO workspaces (user_id, container_id, port, status, last_activity)
+         VALUES ($1, $2, $3, 'running', NOW()) RETURNING *`,
         [userId, container.id, port]
     );
 
