@@ -2,6 +2,7 @@
 const Docker = require('dockerode');
 const path   = require('path');
 const fs     = require('fs');
+const crypto = require('crypto');
 const db     = require('./db');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -149,10 +150,12 @@ const createWorkspace = async (userId, template = 'blank') => {
 
     await container.start();
 
+    const previewToken = crypto.randomBytes(24).toString('hex');
+
     const result = await db.query(
-        `INSERT INTO workspaces (user_id, container_id, port, status, last_activity, template)
-         VALUES ($1, $2, $3, 'running', NOW(), $4) RETURNING *`,
-        [userId, container.id, port, template]
+        `INSERT INTO workspaces (user_id, container_id, port, status, last_activity, template, preview_token)
+         VALUES ($1, $2, $3, 'running', NOW(), $4, $5) RETURNING *`,
+        [userId, container.id, port, template, previewToken]
     );
 
     return result.rows[0];
@@ -203,6 +206,13 @@ const getWorkspaceStatus = async (userId) => {
         } catch {
             ws.status = 'stopped';
         }
+    }
+
+    // Générer le token si absent (workspaces antérieurs à migration 007)
+    if (!ws.preview_token) {
+        const token = crypto.randomBytes(24).toString('hex');
+        await db.query('UPDATE workspaces SET preview_token = $1 WHERE id = $2', [token, ws.id]);
+        ws.preview_token = token;
     }
 
     return ws;

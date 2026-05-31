@@ -138,6 +138,9 @@
   .upgrade-cta strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 2px; }
 
   /* TOAST */
+  .btn-port-quick { font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid var(--border); background:none; color:var(--muted); cursor:pointer; transition:all .15s; }
+  .btn-port-quick:hover { border-color:var(--p); color:var(--p); }
+
   /* TEMPLATE MODAL */
   .tpl-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:990; padding:24px; }
   .tpl-overlay.open { display:flex; }
@@ -253,6 +256,36 @@
       <div class="ws-meta">
         <span id="ws-uptime-display"></span>
         <span id="ws-port-display"></span>
+      </div>
+
+      <!-- PREVIEW URL -->
+      <div id="preview-panel" style="display:none;margin-top:18px;padding:16px;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.2);border-radius:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          🔗 Preview URL
+          <span style="font-size:11px;font-weight:400;color:var(--muted)">— partageable, pas de login requis</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--muted)">Port :</span>
+          <input id="preview-port" type="number" value="3000" min="1024" max="65535"
+            style="width:90px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font-size:13px;outline:none"
+            oninput="updatePreviewUrl()">
+          <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;padding:6px 10px">
+            <code id="preview-url-text" style="font-size:12px;color:var(--p);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">—</code>
+          </div>
+          <button onclick="copyPreviewUrl()" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid rgba(99,102,241,.4);background:none;color:var(--p);white-space:nowrap" title="Copier">📋 Copier</button>
+          <a id="preview-open-btn" href="#" target="_blank" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid rgba(99,102,241,.4);background:none;color:var(--p);white-space:nowrap;text-decoration:none">↗ Ouvrir</a>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--muted)">Ports courants :</span>
+          <button onclick="setPreviewPort(3000)" class="btn-port-quick">3000</button>
+          <button onclick="setPreviewPort(5173)" class="btn-port-quick">5173 (Vite)</button>
+          <button onclick="setPreviewPort(8000)" class="btn-port-quick">8000 (FastAPI)</button>
+          <button onclick="setPreviewPort(8080)" class="btn-port-quick">8080</button>
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--muted)">Token de preview :</span>
+          <button onclick="regeneratePreviewToken(this)" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer">↺ Régénérer</button>
+        </div>
       </div>
     </div>
 
@@ -569,6 +602,13 @@ function updateWorkspaceUI(ws) {
       uptimeEl.innerHTML = `<span class="dot" style="background:var(--green)"></span> Actif depuis ${timeAgo(ws.created_at, true)}`;
     }
     if (ws.port) portEl.textContent = `Port ${ws.port}`;
+
+    // Preview URL panel
+    if (ws.previewBase) {
+      window._previewBase = ws.previewBase;
+      document.getElementById('preview-panel').style.display = 'block';
+      updatePreviewUrl();
+    }
 
   } else {
     viewRun.style.display  = 'none';
@@ -973,6 +1013,48 @@ async function startCheckout(plan) {
 async function logout() {
   await fetch('/auth/logout', { method: 'POST' });
   location.href = '/';
+}
+
+// ── Preview URL ───────────────────────────────────────────────────────────────
+function updatePreviewUrl() {
+  const base = window._previewBase;
+  if (!base) return;
+  const port = document.getElementById('preview-port')?.value || '3000';
+  const url  = `${base}/${port}/`;
+  const el   = document.getElementById('preview-url-text');
+  const btn  = document.getElementById('preview-open-btn');
+  if (el)  el.textContent = url;
+  if (btn) btn.href = url;
+}
+
+function setPreviewPort(port) {
+  const el = document.getElementById('preview-port');
+  if (el) { el.value = port; updatePreviewUrl(); }
+}
+
+async function copyPreviewUrl() {
+  const url = document.getElementById('preview-url-text')?.textContent;
+  if (!url || url === '—') return;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('URL copiée !');
+  } catch {
+    toast('Copiez manuellement : ' + url);
+  }
+}
+
+async function regeneratePreviewToken(btn) {
+  if (!confirm('Régénérer le token invalide l\'ancienne URL preview. Continuer ?')) return;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await API.post('/api/workspace/preview/regenerate', {});
+    if (r.error) { toast(r.error, false); return; }
+    window._previewBase = r.previewBase;
+    updatePreviewUrl();
+    toast('Token régénéré');
+  } finally {
+    btn.disabled = false; btn.textContent = '↺ Régénérer';
+  }
 }
 
 init();

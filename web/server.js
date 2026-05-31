@@ -203,6 +203,46 @@ const server = http.createServer(app);
 
 app.set('trust proxy', 1);
 
+// ── Preview proxy public (app.gamad.net/p/{token}/{port}/...) ─────────────────
+// Aucune auth — accès par token opaque seulement
+app.use(async (req, res, next) => {
+    const host = (req.headers.host || '').split(':')[0];
+    const uiDomain = process.env.GAMADCODE_UI_DOMAIN || 'app.gamad.net';
+    if (host !== uiDomain) return next();
+
+    const m = req.path.match(/^\/p\/([a-f0-9]{48})\/(\d{1,5})(\/.*)?$/);
+    if (!m) return next();
+
+    const [, token, portStr, subPath = '/'] = m;
+    const previewPort = parseInt(portStr, 10);
+    if (previewPort < 1024 || previewPort > 65535)
+        return res.status(400).send('Port invalide (1024–65535)');
+
+    loadLibs();
+    if (!db) return res.status(503).send('Service non disponible');
+
+    try {
+        const r = await db.query(
+            "SELECT port FROM workspaces WHERE preview_token = $1 AND status = 'running'",
+            [token]
+        );
+        if (!r.rows.length)
+            return res.status(404).type('html').send(
+                '<style>body{font-family:sans-serif;background:#0a0a14;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:12px}</style>' +
+                '<h2>Preview non disponible</h2><p>Le workspace est arrêté ou le lien est invalide.</p>'
+            );
+
+        const ip = await resolveContainerIP(r.rows[0].port);
+        if (!ip) return res.status(502).send('Container introuvable');
+
+        // Réécrire l'URL pour ne proxy que le chemin après le préfixe
+        req.url = subPath + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '');
+        proxyHTTP(req, res, ip, previewPort);
+    } catch (e) {
+        res.status(502).send('Erreur proxy : ' + e.message);
+    }
+});
+
 // Capture du raw body pour vérification signature webhook GeniusPay
 app.use(express.json({
     verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); }
@@ -584,14 +624,18 @@ app.get('/api/workspace', requireUser, async (req, res) => {
         const ws = await workspaceLib.getWorkspaceStatus(userId);
 
         // Construire l'URL d'accès au workspace
-        let url = null;
+        let url = null, previewBase = null;
         if (ws.status === 'running' && ws.port) {
             const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
             const token    = generateWsToken(ws.port, userId);
             url = `https://${wsDomain}/?wstoken=${token}`;
         }
+        if (ws.preview_token) {
+            const uiDomain = process.env.GAMADCODE_UI_DOMAIN || 'app.gamad.net';
+            previewBase = `https://${uiDomain}/p/${ws.preview_token}`;
+        }
 
-        res.json({ ...ws, url });
+        res.json({ ...ws, url, previewBase });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -604,6 +648,23 @@ app.get('/api/workspace/templates', (req, res) => {
         { id: 'fastapi',    label: 'FastAPI + Python', icon: '🐍', desc: 'API REST Python avec FastAPI et Uvicorn.' },
         { id: 'express-ts', label: 'Express + TypeScript', icon: '🟦', desc: 'Serveur Node.js Express avec TypeScript et ts-node-dev.' },
     ]);
+});
+
+app.post('/api/workspace/preview/regenerate', requireUser, async (req, res) => {
+    loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+    try {
+        const token = require('crypto').randomBytes(24).toString('hex');
+        const r = await db.query(
+            'UPDATE workspaces SET preview_token = $1 WHERE user_id = $2 RETURNING preview_token',
+            [token, userId]
+        );
+        if (!r.rows.length) return res.status(404).json({ error: 'Workspace introuvable' });
+        const uiDomain  = process.env.GAMADCODE_UI_DOMAIN || 'app.gamad.net';
+        res.json({ token, previewBase: `https://${uiDomain}/p/${token}` });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/workspace/start', requireUser, async (req, res) => {
@@ -1339,6 +1400,30 @@ const wss = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
     const host = (req.headers.host || '').split(':')[0];
+
+    // Preview WS public (app.gamad.net/p/{token}/{port}/...)
+    const uiDomain = process.env.GAMADCODE_UI_DOMAIN || 'app.gamad.net';
+    if (host === uiDomain) {
+        const urlPath = (req.url || '').split('?')[0];
+        const m = urlPath.match(/^\/p\/([a-f0-9]{48})\/(\d{1,5})(\/.*)?$/);
+        if (m) {
+            const [, token, portStr, subPath = '/'] = m;
+            const previewPort = parseInt(portStr, 10);
+            if (db) {
+                db.query("SELECT port FROM workspaces WHERE preview_token = $1 AND status = 'running'", [token])
+                  .then(r => {
+                      if (!r.rows.length) { socket.destroy(); return; }
+                      return resolveContainerIP(r.rows[0].port).then(ip => {
+                          if (!ip) { socket.destroy(); return; }
+                          req.url = subPath + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '');
+                          proxyWS(req, socket, head, ip, previewPort);
+                      });
+                  })
+                  .catch(() => socket.destroy());
+            } else { socket.destroy(); }
+            return;
+        }
+    }
 
     // Workspace OpenVSCode Server → proxy vers le conteneur Docker
     if (host === 'code.gamad.net') {
