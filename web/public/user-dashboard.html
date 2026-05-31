@@ -22,21 +22,27 @@
   a { color: inherit; text-decoration: none; }
 
   /* HEADER */
-  header { display: flex; align-items: center; justify-content: space-between; padding: 18px 32px; border-bottom: 1px solid var(--border); background: rgba(10,10,20,.9); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 99; }
-  .logo { font-size: 20px; font-weight: 800; background: linear-gradient(135deg, var(--p), var(--p2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .user-info { display: flex; align-items: center; gap: 12px; }
-  .user-email { font-size: 14px; color: var(--muted); }
-  .btn-logout { background: none; border: 1px solid var(--border); color: var(--muted); padding: 7px 14px; border-radius: 7px; font-size: 13px; cursor: pointer; transition: border-color .2s, color .2s; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-bottom: 1px solid var(--border); background: rgba(10,10,20,.95); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 99; gap: 16px; }
+  .logo { font-size: 20px; font-weight: 800; background: linear-gradient(135deg, var(--p), var(--p2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; }
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .user-email { font-size: 13px; color: var(--muted); }
+  .btn-logout { background: none; border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; transition: border-color .2s, color .2s; }
   .btn-logout:hover { border-color: var(--red); color: var(--red); }
 
+  /* PLAN BADGE */
+  .plan-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: .5px; }
+  .plan-badge.free       { background: rgba(100,116,139,.15); color: var(--muted);  border: 1px solid rgba(100,116,139,.3); }
+  .plan-badge.pro        { background: rgba(99,102,241,.15);  color: var(--p);      border: 1px solid rgba(99,102,241,.4); }
+  .plan-badge.enterprise { background: rgba(251,191,36,.15);  color: var(--yellow); border: 1px solid rgba(251,191,36,.4); }
+
   /* MAIN */
-  main { max-width: 820px; margin: 0 auto; padding: 40px 24px; display: flex; flex-direction: column; gap: 24px; }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 20px; }
 
   /* CARDS */
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 28px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 24px; }
   .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .card-title { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-  .card-title .icon { font-size: 20px; }
+  .card-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .card-title .icon { font-size: 18px; }
 
   /* STATUS BADGE */
   .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
@@ -45,30 +51,47 @@
   .badge.starting { background: rgba(251,191,36,.1);  color: var(--yellow); border: 1px solid rgba(251,191,36,.3);  }
   .badge.none     { background: rgba(100,116,139,.1); color: var(--muted);  border: 1px solid rgba(100,116,139,.3); }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .dot.pulse { animation: pulse 1.5s ease-in-out infinite; }
 
   /* BUTTONS */
-  .btn { padding: 11px 20px; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: opacity .2s, transform .1s; display: inline-flex; align-items: center; gap: 8px; }
-  .btn:hover { opacity: .85; }
-  .btn:active { transform: scale(.98); }
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn { padding: 10px 18px; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: opacity .2s, transform .1s; display: inline-flex; align-items: center; gap: 8px; }
+  .btn:hover:not(:disabled) { opacity: .85; }
+  .btn:active:not(:disabled) { transform: scale(.98); }
+  .btn:disabled { opacity: .38; cursor: not-allowed; }
   .btn-primary { background: linear-gradient(135deg, var(--p), var(--p2)); color: #fff; }
   .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
-  .btn-outline:hover { border-color: var(--p); color: var(--p); opacity: 1; }
-  .btn-danger { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3); color: var(--red); }
-  .btn-danger:hover { background: rgba(248,113,113,.2); opacity: 1; }
-  .btn-green { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: var(--green); }
-
-  .ws-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-
-  /* WORKSPACE INFO */
-  .ws-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
-  .ws-info-item { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-  .ws-info-item .label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
-  .ws-info-item .value { font-size: 15px; font-weight: 600; font-family: monospace; }
+  .btn-outline:hover:not(:disabled) { border-color: var(--p); color: var(--p); opacity: 1; }
+  .btn-danger  { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3); color: var(--red); }
+  .btn-danger:hover:not(:disabled)  { background: rgba(248,113,113,.2); opacity: 1; }
+  .btn-green   { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: var(--green); }
+  .btn-sm { padding: 7px 14px; font-size: 13px; }
 
   /* SPINNER */
   @keyframes spin { to { transform: rotate(360deg); } }
-  .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+  .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+
+  /* WORKSPACE CARD */
+  .ws-stopped { text-align: center; padding: 12px 0 4px; }
+  .ws-stopped p { color: var(--muted); font-size: 14px; margin-bottom: 20px; line-height: 1.6; }
+  .ws-running { display: flex; flex-direction: column; gap: 16px; }
+  .ws-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .ws-actions-stop { margin-left: auto; }
+  .ws-meta { display: flex; gap: 16px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .ws-meta span { display: flex; align-items: center; gap: 6px; }
+
+  /* ONBOARDING */
+  .onboarding-card { background: linear-gradient(135deg, rgba(99,102,241,.08), rgba(168,85,247,.08)); border: 1px solid rgba(99,102,241,.25); border-radius: 18px; padding: 24px; }
+  .onboarding-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .onboarding-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .onboarding-steps { display: flex; flex-direction: column; gap: 12px; }
+  .ob-step { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .ob-step-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .ob-step-icon.done    { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+  .ob-step-icon.pending { background: rgba(99,102,241,.1); color: var(--p); border: 1px solid rgba(99,102,241,.25); }
+  .ob-step-label { flex: 1; }
+  .ob-step-label.done { color: var(--muted); text-decoration: line-through; }
+  .ob-step-action { font-size: 12px; }
 
   /* API KEYS */
   .key-list { display: flex; flex-direction: column; gap: 12px; }
@@ -79,43 +102,61 @@
   .key-status { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .key-status.has-key { color: var(--green); }
   .key-right { display: flex; align-items: center; gap: 8px; }
-
-  /* KEY FORM */
-  .key-form { display: none; margin-top: 12px; }
+  .key-form { display: none; margin-top: 12px; width: 100%; }
   .key-form.open { display: block; }
-  .key-input-row { display: flex; gap: 8px; }
+  .key-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .key-input-row input {
-    flex: 1; background: rgba(255,255,255,.04); border: 1px solid var(--border);
+    flex: 1; min-width: 200px; background: rgba(255,255,255,.04); border: 1px solid var(--border);
     color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px;
     font-family: monospace; outline: none;
   }
   .key-input-row input:focus { border-color: var(--p); }
 
   /* REPOS */
+  .repo-count { font-size: 13px; color: var(--muted); font-weight: 500; }
   .repo-item { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
   .repo-left { flex:1; min-width:0; }
-  .repo-name { font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .repo-name { font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .repo-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
   .repo-badge.private { background:rgba(251,191,36,.1); color:var(--yellow); border:1px solid rgba(251,191,36,.3); }
   .repo-badge.public  { background:rgba(34,197,94,.1);  color:var(--green);  border:1px solid rgba(34,197,94,.3);  }
-  .repo-desc { font-size:13px; color:var(--muted); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .repo-meta { font-size:12px; color:var(--muted); margin-top:6px; display:flex; align-items:center; gap:10px; }
-  .lang-dot  { width:10px; height:10px; border-radius:50%; display:inline-block; background:var(--muted); margin-right:3px; }
-  .search-input { width:100%; background:rgba(255,255,255,.04); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:8px; font-size:14px; margin-bottom:16px; outline:none; }
+  .repo-desc { font-size:12px; color:var(--muted); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .repo-meta { font-size:12px; color:var(--muted); margin-top:6px; display:flex; align-items:center; gap:8px; }
+  .lang-dot  { width:9px; height:9px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .search-input { width:100%; background:rgba(255,255,255,.04); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:8px; font-size:14px; margin-bottom:14px; outline:none; }
   .search-input:focus { border-color:var(--p); }
+  .pagination { display:flex; align-items:center; justify-content:space-between; margin-top:12px; gap:12px; flex-wrap:wrap; }
+  .page-info { font-size:13px; color:var(--muted); }
+  .page-btns { display:flex; gap:8px; }
+
+  /* ACCOUNT */
+  .acct-row { display:flex; justify-content:space-between; align-items:center; font-size:14px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .acct-row:last-child { border-bottom: none; }
+  .acct-label { color: var(--muted); }
+  .upgrade-cta { margin-top: 16px; padding: 14px; background: linear-gradient(135deg, rgba(99,102,241,.1), rgba(168,85,247,.1)); border: 1px solid rgba(99,102,241,.2); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .upgrade-cta p { font-size: 13px; color: var(--muted); }
+  .upgrade-cta strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 2px; }
 
   /* TOAST */
-  #toast { position: fixed; bottom: 28px; right: 28px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; display: flex; align-items: center; gap: 10px; }
+  #toast { position: fixed; bottom: 28px; right: 28px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; display: flex; align-items: center; gap: 10px; max-width: 340px; }
   #toast.show { transform: translateY(0); opacity: 1; }
   #toast.ok  { border-color: rgba(34,197,94,.4); }
   #toast.err { border-color: rgba(248,113,113,.4); }
+
+  @media (max-width: 540px) {
+    header { padding: 12px 16px; }
+    main   { padding: 20px 12px; }
+    .card  { padding: 18px 16px; }
+    .ws-actions-stop { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">GamadCode</div>
-  <div class="user-info">
+  <div class="header-right">
+    <span class="plan-badge free" id="plan-badge">free</span>
     <span class="user-email" id="user-email">…</span>
     <button class="btn-logout" onclick="logout()">Déconnexion</button>
   </div>
@@ -123,74 +164,113 @@
 
 <main>
 
+  <!-- ONBOARDING -->
+  <div class="onboarding-card" id="onboarding" style="display:none">
+    <div class="onboarding-title">🚀 Démarrez en 3 étapes</div>
+    <div class="onboarding-sub">Configurez votre environnement pour commencer à coder avec l'IA.</div>
+    <div class="onboarding-steps">
+      <div class="ob-step" id="ob-step-anthropic">
+        <div class="ob-step-icon pending" id="ob-icon-anthropic">1</div>
+        <span class="ob-step-label" id="ob-label-anthropic">Ajoutez votre clé Anthropic (Claude)</span>
+        <a class="btn btn-sm btn-outline ob-step-action" href="#key-anthropic" id="ob-action-anthropic" onclick="scrollToKey('anthropic')">Configurer →</a>
+      </div>
+      <div class="ob-step" id="ob-step-github">
+        <div class="ob-step-icon pending" id="ob-icon-github">2</div>
+        <span class="ob-step-label" id="ob-label-github">Ajoutez votre Token GitHub</span>
+        <a class="btn btn-sm btn-outline ob-step-action" href="#key-github" id="ob-action-github" onclick="scrollToKey('github')">Configurer →</a>
+      </div>
+      <div class="ob-step" id="ob-step-ws">
+        <div class="ob-step-icon pending" id="ob-icon-ws">3</div>
+        <span class="ob-step-label" id="ob-label-ws">Démarrez votre environnement</span>
+        <button class="btn btn-sm btn-primary ob-step-action" id="ob-action-ws" onclick="startWorkspace()">Démarrer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- WORKSPACE CARD -->
   <div class="card">
     <div class="card-header">
       <div class="card-title"><span class="icon">🖥️</span> Mon environnement</div>
-      <span class="badge none" id="ws-badge"><span class="dot"></span><span id="ws-status-text">Chargement…</span></span>
+      <span class="badge none" id="ws-badge"><span class="dot" id="ws-dot"></span><span id="ws-status-text">Chargement…</span></span>
     </div>
 
-    <div class="ws-actions">
-      <button class="btn btn-primary" id="btn-start" onclick="startWorkspace()" disabled>
-        <span>▶ Démarrer l'environnement</span>
-      </button>
-      <button class="btn btn-green" id="btn-claude" onclick="launchTool('claude')" style="display:none">
-        🤖 Ouvrir avec Claude
-      </button>
-      <button class="btn btn-outline" id="btn-codex" onclick="launchTool('codex')" style="display:none">
-        ✨ Ouvrir avec Codex
-      </button>
-      <a class="btn btn-outline" id="btn-vscode" href="#" target="_blank" style="display:none">
-        ⬡ Ouvrir VS Code
-      </a>
-      <button class="btn btn-danger" id="btn-stop" onclick="stopWorkspace()" style="display:none">
-        ⬛ Arrêter
+    <!-- État arrêté / non créé -->
+    <div class="ws-stopped" id="ws-view-stopped" style="display:none">
+      <p>Démarrez votre environnement de développement<br>pour accéder à Claude Code, Codex et VS Code.</p>
+      <button class="btn btn-primary" id="btn-start" onclick="startWorkspace()">
+        ▶ Démarrer l'environnement
       </button>
     </div>
 
-    <div class="ws-info" id="ws-info" style="display:none">
-      <div class="ws-info-item">
-        <div class="label">Port</div>
-        <div class="value" id="ws-port">—</div>
+    <!-- État en cours -->
+    <div class="ws-running" id="ws-view-running" style="display:none">
+      <div class="ws-actions">
+        <button class="btn btn-green" id="btn-claude" onclick="launchTool('claude')">
+          🤖 Ouvrir avec Claude
+        </button>
+        <button class="btn btn-outline" id="btn-codex" onclick="launchTool('codex')">
+          ✨ Ouvrir avec Codex
+        </button>
+        <a class="btn btn-outline" id="btn-vscode" href="#" target="_blank">
+          ⬡ VS Code
+        </a>
+        <button class="btn btn-danger btn-sm ws-actions-stop" id="btn-stop" onclick="stopWorkspace()">
+          ⬛ Arrêter
+        </button>
       </div>
-      <div class="ws-info-item">
-        <div class="label">Créé le</div>
-        <div class="value" id="ws-created">—</div>
+      <div class="ws-meta">
+        <span id="ws-uptime-display"></span>
+        <span id="ws-port-display"></span>
       </div>
     </div>
+
   </div>
 
   <!-- GITHUB REPOS CARD -->
   <div class="card">
     <div class="card-header">
-      <div class="card-title"><span class="icon">🐙</span> Dépôts GitHub</div>
-      <button class="btn btn-outline" id="btn-refresh-repos" onclick="loadRepos()" style="font-size:12px;padding:6px 12px">↻</button>
+      <div class="card-title">
+        <span class="icon">🐙</span> Dépôts GitHub
+        <span class="repo-count" id="repo-count"></span>
+      </div>
+      <button class="btn btn-sm btn-outline" id="btn-refresh-repos" onclick="loadRepos()">↻</button>
     </div>
 
     <div id="repos-no-token" style="display:none">
-      <p style="color:var(--muted);font-size:14px">Configurez votre <strong>Token GitHub</strong> dans la section Clés API pour accéder à vos dépôts.</p>
+      <p style="color:var(--muted);font-size:14px;line-height:1.6">
+        Ajoutez votre <strong>Token GitHub</strong> dans la section Clés API ci-dessous
+        pour accéder à vos dépôts et les ouvrir directement dans votre environnement.
+      </p>
     </div>
     <div id="repos-loading" style="display:none">
-      <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px"><span class="spinner"></span> Chargement des dépôts…</div>
+      <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px">
+        <span class="spinner"></span> Chargement des dépôts…
+      </div>
     </div>
     <div id="repos-container" style="display:none">
       <input class="search-input" type="text" id="repos-search" placeholder="Rechercher un dépôt…" oninput="filterRepos()">
       <div id="repos-list"></div>
       <p id="repos-empty" style="display:none;color:var(--muted);font-size:14px;text-align:center;padding:20px 0">Aucun dépôt trouvé</p>
+      <div class="pagination" id="repos-pagination" style="display:none">
+        <span class="page-info" id="page-info"></span>
+        <div class="page-btns">
+          <button class="btn btn-sm btn-outline" id="btn-prev" onclick="changePage(-1)">← Préc.</button>
+          <button class="btn btn-sm btn-outline" id="btn-next" onclick="changePage(+1)">Suiv. →</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- API KEYS CARD -->
-  <div class="card">
+  <div class="card" id="card-keys">
     <div class="card-header">
       <div class="card-title"><span class="icon">🔑</span> Clés API</div>
     </div>
-    <p style="color:var(--muted);font-size:14px;margin-bottom:20px">
-      Vos clés sont stockées de façon sécurisée et injectées automatiquement dans votre environnement.
+    <p style="color:var(--muted);font-size:13px;margin-bottom:18px;line-height:1.6">
+      Vos clés sont chiffrées et injectées automatiquement dans votre environnement au démarrage.
     </p>
     <div class="key-list">
 
-      <!-- Anthropic -->
       <div class="key-item" id="key-anthropic">
         <div class="key-left">
           <span class="provider-icon">🤖</span>
@@ -200,19 +280,18 @@
           </div>
         </div>
         <div class="key-right">
-          <button class="btn btn-outline" onclick="toggleKeyForm('anthropic')">Modifier</button>
-          <button class="btn btn-danger" id="del-anthropic" onclick="deleteKey('anthropic')" style="display:none">Supprimer</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleKeyForm('anthropic')">Modifier</button>
+          <button class="btn btn-sm btn-danger" id="del-anthropic" onclick="deleteKey('anthropic')" style="display:none">Supprimer</button>
         </div>
         <div class="key-form" id="form-anthropic">
           <div class="key-input-row">
             <input type="password" id="input-anthropic" placeholder="sk-ant-api03-…" autocomplete="off">
-            <button class="btn btn-primary" onclick="saveKey('anthropic')">Sauvegarder</button>
-            <button class="btn btn-outline" onclick="toggleKeyForm('anthropic')">Annuler</button>
+            <button class="btn btn-primary btn-sm" onclick="saveKey('anthropic')">Sauvegarder</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleKeyForm('anthropic')">Annuler</button>
           </div>
         </div>
       </div>
 
-      <!-- OpenAI -->
       <div class="key-item" id="key-openai">
         <div class="key-left">
           <span class="provider-icon">✨</span>
@@ -222,19 +301,18 @@
           </div>
         </div>
         <div class="key-right">
-          <button class="btn btn-outline" onclick="toggleKeyForm('openai')">Modifier</button>
-          <button class="btn btn-danger" id="del-openai" onclick="deleteKey('openai')" style="display:none">Supprimer</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleKeyForm('openai')">Modifier</button>
+          <button class="btn btn-sm btn-danger" id="del-openai" onclick="deleteKey('openai')" style="display:none">Supprimer</button>
         </div>
         <div class="key-form" id="form-openai">
           <div class="key-input-row">
             <input type="password" id="input-openai" placeholder="sk-…" autocomplete="off">
-            <button class="btn btn-primary" onclick="saveKey('openai')">Sauvegarder</button>
-            <button class="btn btn-outline" onclick="toggleKeyForm('openai')">Annuler</button>
+            <button class="btn btn-primary btn-sm" onclick="saveKey('openai')">Sauvegarder</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleKeyForm('openai')">Annuler</button>
           </div>
         </div>
       </div>
 
-      <!-- GitHub -->
       <div class="key-item" id="key-github">
         <div class="key-left">
           <span class="provider-icon">🐙</span>
@@ -244,14 +322,14 @@
           </div>
         </div>
         <div class="key-right">
-          <button class="btn btn-outline" onclick="toggleKeyForm('github')">Modifier</button>
-          <button class="btn btn-danger" id="del-github" onclick="deleteKey('github')" style="display:none">Supprimer</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleKeyForm('github')">Modifier</button>
+          <button class="btn btn-sm btn-danger" id="del-github" onclick="deleteKey('github')" style="display:none">Supprimer</button>
         </div>
         <div class="key-form" id="form-github">
           <div class="key-input-row">
             <input type="password" id="input-github" placeholder="ghp_…" autocomplete="off">
-            <button class="btn btn-primary" onclick="saveKey('github')">Sauvegarder</button>
-            <button class="btn btn-outline" onclick="toggleKeyForm('github')">Annuler</button>
+            <button class="btn btn-primary btn-sm" onclick="saveKey('github')">Sauvegarder</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleKeyForm('github')">Annuler</button>
           </div>
         </div>
       </div>
@@ -262,15 +340,26 @@
   <!-- ACCOUNT CARD -->
   <div class="card">
     <div class="card-title" style="margin-bottom:16px"><span class="icon">👤</span> Mon compte</div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;justify-content:space-between;font-size:14px">
-        <span style="color:var(--muted)">Email</span>
-        <span id="acct-email" style="font-family:monospace">—</span>
+    <div>
+      <div class="acct-row">
+        <span class="acct-label">Email</span>
+        <span id="acct-email" style="font-family:monospace;font-size:13px">—</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:14px">
-        <span style="color:var(--muted)">Membre depuis</span>
+      <div class="acct-row">
+        <span class="acct-label">Plan</span>
+        <span id="acct-plan">—</span>
+      </div>
+      <div class="acct-row">
+        <span class="acct-label">Membre depuis</span>
         <span id="acct-since">—</span>
       </div>
+    </div>
+    <div class="upgrade-cta" id="upgrade-cta" style="display:none">
+      <div>
+        <strong>Passez à Pro</strong>
+        <p>Plus de dépôts, plus de ressources, priorité de démarrage.</p>
+      </div>
+      <a class="btn btn-primary btn-sm" href="mailto:contact@gamad.net?subject=Upgrade Pro">Upgrader →</a>
     </div>
   </div>
 
@@ -279,20 +368,44 @@
 <div id="toast"></div>
 
 <script>
-let currentUser = null;
-let wsData      = null;
-let wsInterval  = null;
-let allRepos    = [];
+'use strict';
 
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentUser  = null;
+let wsData       = null;
+let wsInterval   = null;
+let allRepos     = [];
+let filteredRepos = [];
+let reposPage    = 0;
+const REPOS_PER_PAGE = 8;
+
+// Clés configurées (pour onboarding)
+const configuredKeys = new Set();
+
+// ── Sécurité XSS : échapper toutes les données externes ─────────────────────
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ── API ───────────────────────────────────────────────────────────────────────
 const API = {
-  async get(url)  { const r = await fetch(url); return r.json(); },
+  async get(url)  {
+    const r = await fetch(url);
+    return r.json();
+  },
   async post(url, body) {
     const r = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     return r.json();
   },
-  async del(url) { const r = await fetch(url, { method: 'DELETE' }); return r.json(); }
+  async put(url, body) {
+    const r = await fetch(url, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    return r.json();
+  },
+  async del(url) {
+    const r = await fetch(url, { method: 'DELETE' });
+    return r.json();
+  }
 };
 
+// ── Toast ─────────────────────────────────────────────────────────────────────
 const toast = (msg, ok = true) => {
   const el = document.getElementById('toast');
   el.textContent = (ok ? '✓ ' : '✗ ') + msg;
@@ -307,12 +420,27 @@ async function init() {
   if (me.type === 'admin' && !me.userId) { location.href = '/dashboard'; return; }
 
   currentUser = me;
-  document.getElementById('user-email').textContent = me.email || me.login;
-  document.getElementById('acct-email').textContent  = me.email || me.login;
-  document.getElementById('acct-since').textContent  = me.createdAt ? new Date(me.createdAt).toLocaleDateString('fr-FR') : '—';
 
-  await loadWorkspace();
-  await loadKeys();
+  // Header
+  document.getElementById('user-email').textContent = me.email || me.login || '';
+
+  // Plan badge
+  const plan = me.plan || 'free';
+  const planBadge = document.getElementById('plan-badge');
+  planBadge.textContent = plan;
+  planBadge.className = 'plan-badge ' + plan;
+
+  // Compte
+  document.getElementById('acct-email').textContent = me.email || me.login || '—';
+  document.getElementById('acct-since').textContent = me.createdAt ? new Date(me.createdAt).toLocaleDateString('fr-FR') : '—';
+  const planLabel = { free: 'Gratuit', pro: 'Pro', enterprise: 'Entreprise' };
+  document.getElementById('acct-plan').innerHTML =
+    `<span class="plan-badge ${plan}">${planLabel[plan] || plan}</span>`;
+
+  // CTA upgrade pour les free
+  if (plan === 'free') document.getElementById('upgrade-cta').style.display = 'flex';
+
+  await Promise.all([loadWorkspace(), loadKeys()]);
   loadRepos();
   wsInterval = setInterval(loadWorkspace, 10000);
 }
@@ -322,51 +450,72 @@ async function loadWorkspace() {
   const data = await API.get('/api/workspace');
   wsData = data;
   updateWorkspaceUI(data);
+  updateOnboarding();
 }
 
 function updateWorkspaceUI(ws) {
-  const badge   = document.getElementById('ws-badge');
-  const sText   = document.getElementById('ws-status-text');
-  const btnStart = document.getElementById('btn-start');
-  const btnStop  = document.getElementById('btn-stop');
-  const btnVsc   = document.getElementById('btn-vscode');
-  const btnClaude = document.getElementById('btn-claude');
-  const btnCodex  = document.getElementById('btn-codex');
-  const wsInfo   = document.getElementById('ws-info');
+  const badge      = document.getElementById('ws-badge');
+  const dot        = document.getElementById('ws-dot');
+  const sText      = document.getElementById('ws-status-text');
+  const viewStop   = document.getElementById('ws-view-stopped');
+  const viewRun    = document.getElementById('ws-view-running');
+  const btnStart   = document.getElementById('btn-start');
 
   const status = ws.status || 'none';
 
+  // Badge statut
   badge.className = 'badge ' + status;
-  sText.textContent = { none: 'Pas encore créé', stopped: 'Arrêté', running: 'En cours', starting: 'Démarrage…' }[status] || status;
+  dot.className = 'dot' + (status === 'running' ? ' pulse' : '');
+  const labels = { none: 'Non créé', stopped: 'Arrêté', running: 'En cours', starting: 'Démarrage…' };
+  sText.textContent = labels[status] || status;
 
-  btnStart.disabled = (status === 'running' || status === 'starting');
-  btnStart.innerHTML = status === 'starting' ? '<span class="spinner"></span> Démarrage…' : '▶ Démarrer l\'environnement';
-  btnStop.style.display    = status === 'running' ? 'inline-flex' : 'none';
-  btnVsc.style.display      = status === 'running' ? 'inline-flex' : 'none';
-  btnClaude.style.display   = status === 'running' ? 'inline-flex' : 'none';
-  btnCodex.style.display    = status === 'running' ? 'inline-flex' : 'none';
+  if (status === 'running') {
+    viewStop.style.display = 'none';
+    viewRun.style.display  = 'flex';
 
-  if (ws.url) btnVsc.href = ws.url;
+    // URL workspace
+    if (ws.url) document.getElementById('btn-vscode').href = ws.url;
 
-  if (ws.port) {
-    wsInfo.style.display = 'grid';
-    document.getElementById('ws-port').textContent    = ws.port;
-    document.getElementById('ws-created').textContent = ws.created_at ? new Date(ws.created_at).toLocaleDateString('fr-FR') : '—';
+    // Meta : uptime + port
+    const uptimeEl = document.getElementById('ws-uptime-display');
+    const portEl   = document.getElementById('ws-port-display');
+    if (ws.created_at) {
+      uptimeEl.innerHTML = `<span class="dot" style="background:var(--green)"></span> Actif depuis ${timeAgo(ws.created_at, true)}`;
+    }
+    if (ws.port) portEl.textContent = `Port ${ws.port}`;
+
   } else {
-    wsInfo.style.display = 'none';
+    viewRun.style.display  = 'none';
+    viewStop.style.display = 'block';
+
+    // Bouton démarrer
+    if (status === 'starting') {
+      btnStart.disabled = true;
+      btnStart.innerHTML = '<span class="spinner"></span> Démarrage…';
+    } else {
+      btnStart.disabled = false;
+      btnStart.innerHTML = '▶ Démarrer l\'environnement';
+    }
   }
+
+  // Repos : mettre à jour les boutons "Ouvrir" selon le statut
+  renderReposPage();
 }
 
 async function startWorkspace() {
   const btn = document.getElementById('btn-start');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Démarrage…';
+  const obBtn = document.getElementById('ob-action-ws');
+  [btn, obBtn].forEach(b => { if (b) { b.disabled = true; b.innerHTML = '<span class="spinner"></span> Démarrage…'; } });
 
-  const data = await API.post('/api/workspace/start', {});
-  if (data.error) { toast(data.error, false); btn.disabled = false; return; }
-
-  toast('Environnement démarré !');
-  await loadWorkspace();
+  try {
+    const data = await API.post('/api/workspace/start', {});
+    if (data.error) { toast(data.error, false); return; }
+    toast('Environnement démarré !');
+    await loadWorkspace();
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '▶ Démarrer l\'environnement'; }
+    if (obBtn) { obBtn.disabled = false; obBtn.innerHTML = 'Démarrer'; }
+  }
 }
 
 async function launchTool(tool) {
@@ -374,13 +523,13 @@ async function launchTool(tool) {
   const original = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Ouverture…';
-  // Ouvrir la fenêtre AVANT l'await pour rester dans la user-gesture (sinon popup blocker)
+  // Ouvrir avant l'await pour rester dans la user-gesture (évite le popup blocker)
   const win = window.open('', '_blank');
   try {
     const data = await API.post('/api/workspace/launch', { tool });
     if (data.error) { if (win) win.close(); toast(data.error, false); return; }
     if (win) win.location.href = data.url;
-    else location.href = data.url; // fallback si popup blocker quand même actif
+    else location.href = data.url;
   } finally {
     btn.disabled = false;
     btn.innerHTML = original;
@@ -389,10 +538,65 @@ async function launchTool(tool) {
 
 async function stopWorkspace() {
   if (!confirm('Arrêter votre environnement ?')) return;
-  const data = await API.post('/api/workspace/stop', {});
-  if (data.error) { toast(data.error, false); return; }
-  toast('Environnement arrêté');
-  await loadWorkspace();
+  const btn = document.getElementById('btn-stop');
+  btn.disabled = true;
+  try {
+    const data = await API.post('/api/workspace/stop', {});
+    if (data.error) { toast(data.error, false); return; }
+    toast('Environnement arrêté');
+    await loadWorkspace();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Onboarding ────────────────────────────────────────────────────────────────
+function updateOnboarding() {
+  const hasAnthropic = configuredKeys.has('anthropic');
+  const hasGithub    = configuredKeys.has('github');
+  const hasWs        = wsData && wsData.status !== 'none';
+  const allDone      = hasAnthropic && hasGithub && hasWs;
+
+  // Masquer si tout est fait
+  document.getElementById('onboarding').style.display = allDone ? 'none' : 'block';
+  if (allDone) return;
+
+  setStep('anthropic', hasAnthropic);
+  setStep('github',    hasGithub);
+
+  const wsIcon  = document.getElementById('ob-icon-ws');
+  const wsLabel = document.getElementById('ob-label-ws');
+  const wsAction = document.getElementById('ob-action-ws');
+  if (hasWs) {
+    wsIcon.className = 'ob-step-icon done'; wsIcon.textContent = '✓';
+    wsLabel.className = 'ob-step-label done';
+    if (wsAction) wsAction.style.display = 'none';
+  } else {
+    wsIcon.className = 'ob-step-icon pending'; wsIcon.textContent = '3';
+    wsLabel.className = 'ob-step-label';
+    if (wsAction) wsAction.style.display = '';
+  }
+}
+
+function setStep(key, done) {
+  const icon   = document.getElementById('ob-icon-' + key);
+  const label  = document.getElementById('ob-label-' + key);
+  const action = document.getElementById('ob-action-' + key);
+  const num    = { anthropic: '1', github: '2' }[key] || '?';
+  if (done) {
+    icon.className = 'ob-step-icon done'; icon.textContent = '✓';
+    label.className = 'ob-step-label done';
+    if (action) action.style.display = 'none';
+  } else {
+    icon.className = 'ob-step-icon pending'; icon.textContent = num;
+    label.className = 'ob-step-label';
+    if (action) action.style.display = '';
+  }
+}
+
+function scrollToKey(provider) {
+  const el = document.getElementById('key-' + provider);
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); toggleKeyForm(provider); }
 }
 
 // ── API Keys ──────────────────────────────────────────────────────────────────
@@ -400,11 +604,17 @@ async function loadKeys() {
   const data = await API.get('/api/keys');
   if (!Array.isArray(data)) return;
   for (const k of data) {
-    const statusEl = document.getElementById('status-' + k.provider);
-    const delBtn   = document.getElementById('del-'    + k.provider);
-    if (statusEl) { statusEl.textContent = '✓ Configuré'; statusEl.classList.add('has-key'); }
-    if (delBtn)   { delBtn.style.display = 'inline-flex'; }
+    markKeyConfigured(k.provider);
   }
+  updateOnboarding();
+}
+
+function markKeyConfigured(provider) {
+  configuredKeys.add(provider);
+  const statusEl = document.getElementById('status-' + provider);
+  const delBtn   = document.getElementById('del-'    + provider);
+  if (statusEl) { statusEl.textContent = '✓ Configuré'; statusEl.classList.add('has-key'); }
+  if (delBtn)   delBtn.style.display = 'inline-flex';
 }
 
 function toggleKeyForm(provider) {
@@ -416,39 +626,43 @@ function toggleKeyForm(provider) {
 async function saveKey(provider) {
   const val = document.getElementById('input-' + provider).value.trim();
   if (!val) return;
-
   const data = await API.post('/api/keys', { provider, key: val });
   if (data.error) { toast(data.error, false); return; }
-
-  document.getElementById('status-' + provider).textContent = '✓ Configuré';
-  document.getElementById('status-' + provider).classList.add('has-key');
-  document.getElementById('del-' + provider).style.display = 'inline-flex';
+  markKeyConfigured(provider);
   document.getElementById('input-' + provider).value = '';
   document.getElementById('form-' + provider).classList.remove('open');
   toast('Clé ' + provider + ' sauvegardée');
+  updateOnboarding();
 }
 
 async function deleteKey(provider) {
   if (!confirm(`Supprimer la clé ${provider} ?`)) return;
   const data = await API.del('/api/keys/' + provider);
   if (data.error) { toast(data.error, false); return; }
-
-  document.getElementById('status-' + provider).textContent = 'Non configuré';
-  document.getElementById('status-' + provider).classList.remove('has-key');
-  document.getElementById('del-' + provider).style.display = 'none';
+  configuredKeys.delete(provider);
+  const statusEl = document.getElementById('status-' + provider);
+  const delBtn   = document.getElementById('del-' + provider);
+  if (statusEl) { statusEl.textContent = 'Non configuré'; statusEl.classList.remove('has-key'); }
+  if (delBtn)   delBtn.style.display = 'none';
   toast('Clé supprimée');
+  updateOnboarding();
 }
 
 // ── GitHub Repos ──────────────────────────────────────────────────────────────
-const LANG_COLORS = { JavaScript:'#f1e05a', TypeScript:'#3178c6', Python:'#3572A5', Rust:'#dea584', Go:'#00ADD8', Java:'#b07219', 'C++':'#f34b7d', PHP:'#4F5D95', Ruby:'#701516', Shell:'#89e051', HTML:'#e34c26', CSS:'#563d7c', Vue:'#41b883', Svelte:'#ff3e00', Kotlin:'#A97BFF', Swift:'#F05138' };
+const LANG_COLORS = {
+  JavaScript:'#f1e05a', TypeScript:'#3178c6', Python:'#3572A5', Rust:'#dea584',
+  Go:'#00ADD8', Java:'#b07219', 'C++':'#f34b7d', PHP:'#4F5D95', Ruby:'#701516',
+  Shell:'#89e051', HTML:'#e34c26', CSS:'#563d7c', Vue:'#41b883', Svelte:'#ff3e00',
+  Kotlin:'#A97BFF', Swift:'#F05138'
+};
 
 async function loadRepos() {
-  document.getElementById('repos-no-token').style.display   = 'none';
-  document.getElementById('repos-loading').style.display    = 'flex';
-  document.getElementById('repos-container').style.display  = 'none';
+  document.getElementById('repos-no-token').style.display  = 'none';
+  document.getElementById('repos-loading').style.display   = 'flex';
+  document.getElementById('repos-container').style.display = 'none';
+  document.getElementById('repo-count').textContent        = '';
 
   const data = await API.get('/api/github/repos');
-
   document.getElementById('repos-loading').style.display = 'none';
 
   if (data.error) {
@@ -457,40 +671,84 @@ async function loadRepos() {
   }
 
   allRepos = data;
-  renderRepos(data);
+  document.getElementById('repo-count').textContent = `(${allRepos.length})`;
+  filterRepos();
   document.getElementById('repos-container').style.display = 'block';
 }
 
 function filterRepos() {
-  const q = document.getElementById('repos-search').value.toLowerCase();
-  renderRepos(allRepos.filter(r => r.name.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q)));
+  const q = document.getElementById('repos-search')?.value.toLowerCase() || '';
+  filteredRepos = q
+    ? allRepos.filter(r => r.name.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q))
+    : allRepos.slice();
+  reposPage = 0;
+  renderReposPage();
 }
 
-function renderRepos(repos) {
+function changePage(delta) {
+  const maxPage = Math.ceil(filteredRepos.length / REPOS_PER_PAGE) - 1;
+  reposPage = Math.max(0, Math.min(maxPage, reposPage + delta));
+  renderReposPage();
+}
+
+function renderReposPage() {
   const list  = document.getElementById('repos-list');
   const empty = document.getElementById('repos-empty');
-  const isRunning = wsData && wsData.status === 'running';
+  const pag   = document.getElementById('repos-pagination');
+  const pageInfo = document.getElementById('page-info');
 
-  if (!repos.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+  if (!list) return; // pas encore rendu
+
+  if (!filteredRepos.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    pag.style.display = 'none';
+    return;
+  }
+
   empty.style.display = 'none';
+  const isRunning = wsData && wsData.status === 'running';
+  const start = reposPage * REPOS_PER_PAGE;
+  const page  = filteredRepos.slice(start, start + REPOS_PER_PAGE);
+  const totalPages = Math.ceil(filteredRepos.length / REPOS_PER_PAGE);
 
-  list.innerHTML = repos.map(r => {
-    const dot   = LANG_COLORS[r.language] ? `<span class="lang-dot" style="background:${LANG_COLORS[r.language]}"></span>${r.language}` : (r.language || '');
-    const ago   = r.updated_at ? timeAgo(r.updated_at) : '';
-    const btnDisabled = isRunning ? '' : 'disabled title="Démarrez votre environnement d\'abord"';
+  list.innerHTML = page.map(r => {
+    const dot  = LANG_COLORS[r.language]
+      ? `<span class="lang-dot" style="background:${LANG_COLORS[r.language]}"></span>${esc(r.language)}`
+      : esc(r.language || '');
+    const ago  = r.updated_at ? timeAgo(r.updated_at) : '';
+    // URL validée pour éviter javascript: XSS
+    const safeUrl = /^https:\/\/github\.com\//.test(r.html_url) ? r.html_url : '#';
+    const btnAttr = isRunning
+      ? `data-url="${esc(r.clone_url)}" data-name="${esc(r.name)}" onclick="openRepoBtn(this)"`
+      : `disabled title="Démarrez votre environnement d'abord"`;
     return `<div class="repo-item">
       <div class="repo-left">
         <div class="repo-name">
-          <a href="${r.html_url}" target="_blank" style="color:var(--text)">${r.name}</a>
+          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${esc(r.name)}</a>
           <span class="repo-badge ${r.private ? 'private' : 'public'}">${r.private ? 'Privé' : 'Public'}</span>
         </div>
-        ${r.description ? `<div class="repo-desc">${r.description}</div>` : ''}
-        <div class="repo-meta">${dot}${dot && ago ? ' · ' : ''}${ago}</div>
+        ${r.description ? `<div class="repo-desc">${esc(r.description)}</div>` : ''}
+        <div class="repo-meta">${dot}${dot && ago ? ' · ' : ''}${ago}${r.stargazers_count ? ' · ⭐ ' + r.stargazers_count : ''}</div>
       </div>
-      <button class="btn btn-outline" style="font-size:13px;padding:7px 14px;white-space:nowrap" ${btnDisabled}
-        onclick="openRepo('${r.clone_url}','${r.name}',this)">↗ Ouvrir</button>
+      <button class="btn btn-outline btn-sm" style="white-space:nowrap;flex-shrink:0" ${btnAttr}>↗ Ouvrir</button>
     </div>`;
   }).join('');
+
+  // Pagination
+  if (totalPages > 1) {
+    pag.style.display = 'flex';
+    pageInfo.textContent = `Page ${reposPage + 1}/${totalPages} · ${filteredRepos.length} dépôt${filteredRepos.length > 1 ? 's' : ''}`;
+    document.getElementById('btn-prev').disabled = reposPage === 0;
+    document.getElementById('btn-next').disabled = reposPage >= totalPages - 1;
+  } else {
+    pag.style.display = 'none';
+  }
+}
+
+// Lit l'URL et le nom depuis les data-attributes (safe, pas d'injection inline)
+function openRepoBtn(btn) {
+  return openRepo(btn.dataset.url, btn.dataset.name, btn);
 }
 
 async function openRepo(cloneUrl, repoName, btn) {
@@ -508,8 +766,15 @@ async function openRepo(cloneUrl, repoName, btn) {
   }
 }
 
-function timeAgo(iso) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function timeAgo(iso, long = false) {
   const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (long) {
+    if (s < 60)       return 'quelques secondes';
+    if (s < 3600)     return `${Math.floor(s/60)} min`;
+    if (s < 86400)    return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+    return `${Math.floor(s/86400)}j`;
+  }
   if (s < 60)       return 'à l\'instant';
   if (s < 3600)     return `il y a ${Math.floor(s/60)} min`;
   if (s < 86400)    return `il y a ${Math.floor(s/3600)} h`;

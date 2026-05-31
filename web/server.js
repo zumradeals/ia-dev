@@ -291,10 +291,10 @@ app.get('/api/me', async (req, res) => {
         loadLibs();
         if (!db) return res.json({ authenticated: true, type: 'user', email: req.session.userEmail });
         try {
-            const r = await db.query('SELECT id, email, name, is_admin, created_at FROM users WHERE id = $1', [req.session.userId]);
+            const r = await db.query('SELECT id, email, name, is_admin, plan, created_at FROM users WHERE id = $1', [req.session.userId]);
             if (!r.rows.length) { req.session.destroy(); return res.json({ authenticated: false }); }
             const u = r.rows[0];
-            return res.json({ authenticated: true, type: 'user', userId: u.id, email: u.email, name: u.name, isAdmin: u.is_admin, createdAt: u.created_at });
+            return res.json({ authenticated: true, type: 'user', userId: u.id, email: u.email, name: u.name, isAdmin: u.is_admin, plan: u.plan || 'free', createdAt: u.created_at });
         } catch (e) {
             return res.json({ authenticated: true, type: 'user', email: req.session.userEmail });
         }
