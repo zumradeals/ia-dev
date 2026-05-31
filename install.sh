@@ -224,6 +224,7 @@ POSTGRES_PORT="5432"
 
 WORKSPACE_BASE="/opt/gamadcode/users"
 CODE_SERVER_IMAGE="codercom/code-server:latest"
+WORKSPACE_IMAGE="zumradeals/gamadcode-workspace:latest"
 
 ADMIN_GITHUB_LOGIN="${ADMIN_GITHUB_LOGIN}"
 GITHUB_CALLBACK_URL="${GITHUB_CALLBACK_URL}"
