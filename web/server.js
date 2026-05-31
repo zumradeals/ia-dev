@@ -34,7 +34,6 @@ const ADMIN_GITHUB_LOGIN   = process.env.ADMIN_GITHUB_LOGIN   || '';
 // ── Workspace proxy helpers ───────────────────────────────────────────────────
 const wsTokenStore   = new Map(); // token → { port, created }
 const containerIPCache = new Map(); // ws_port (number) → { ip, expires }
-const portProxyCache   = new Map(); // `${ip}:${port}` → proxy instance
 
 // Résoudre l'IP interne Docker d'un conteneur via son port externe
 const resolveContainerIP = async (wsPort) => {
@@ -59,19 +58,33 @@ const resolveContainerIP = async (wsPort) => {
     return null;
 };
 
-// Proxy mis en cache par ip:port interne (HTTP + WS)
-const getPortProxy = (ip, internalPort) => {
-    const key = `${ip}:${internalPort}`;
-    if (!portProxyCache.has(key)) {
-        portProxyCache.set(key, createProxyMiddleware({
-            target:      `http://${ip}:${internalPort}`,
-            changeOrigin: true,
-            ws:           true,
-            pathRewrite: (path) => path.replace(/^\/proxy\/\d+/, '') || '/',
-            on: { error: (e, req, res) => { try { res?.status?.(502).end(); } catch {} } }
-        }));
-    }
-    return portProxyCache.get(key);
+// Proxy HTTP bas-niveau → pas de createProxyMiddleware (évite l'accrochage sur server.upgrade)
+const proxyHTTP = (req, res, ip, internalPort) => {
+    const subPath = (req.url || '/').replace(/^\/proxy\/\d+/, '') || '/';
+    const opts = { hostname: ip, port: internalPort, path: subPath, method: req.method,
+                   headers: { ...req.headers, host: `${ip}:${internalPort}` } };
+    delete opts.headers.connection;
+    const upstream = http.request(opts, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res, { end: true });
+    });
+    req.pipe(upstream, { end: true });
+    upstream.on('error', () => { try { res.status(502).end(); } catch {} });
+};
+
+// Proxy WebSocket bas-niveau via net.createConnection
+const proxyWS = (req, socket, head, ip, internalPort) => {
+    const net = require('net');
+    const subPath  = (req.url || '/').replace(/^\/proxy\/\d+/, '') || '/';
+    const hdrs     = Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n');
+    const conn = net.createConnection({ host: ip, port: internalPort }, () => {
+        conn.write(`${req.method || 'GET'} ${subPath} HTTP/1.1\r\n${hdrs}\r\n\r\n`);
+        if (head?.length) conn.write(head);
+        socket.pipe(conn);
+        conn.pipe(socket);
+    });
+    conn.on('error', () => { try { socket.destroy(); } catch {} });
+    socket.on('error', () => { try { conn.destroy(); } catch {} });
 };
 
 const generateWsToken = (port) => {
@@ -164,13 +177,13 @@ app.use((req, res, next) => {
     }
 
     // /proxy/:internalPort/* → proxy direct vers l'IP interne du conteneur
-    const portMatch = req.path.match(/^\/proxy\/(\d+)(\/.*)?$/);
+    const portMatch = req.path.match(/^\/proxy\/(\d+)/);
     if (portMatch) {
         const internalPort = parseInt(portMatch[1]);
         resolveContainerIP(parseInt(port))
             .then(ip => {
                 if (!ip) return res.status(502).send('Conteneur introuvable');
-                getPortProxy(ip, internalPort)(req, res, next);
+                proxyHTTP(req, res, ip, internalPort);
             })
             .catch(() => res.status(502).send('Erreur proxy interne'));
         return;
@@ -748,7 +761,7 @@ server.on('upgrade', (req, socket, head) => {
             resolveContainerIP(parseInt(wsPort))
                 .then(ip => {
                     if (!ip) { socket.destroy(); return; }
-                    getPortProxy(ip, parseInt(portMatch[1])).upgrade(req, socket, head);
+                    proxyWS(req, socket, head, ip, parseInt(portMatch[1]));
                 })
                 .catch(() => socket.destroy());
             return;
