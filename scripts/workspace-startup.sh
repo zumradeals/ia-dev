@@ -488,6 +488,120 @@ JSEOF
     echo "[gamad] Setup terminé."
 fi
 
+# ── Template de workspace (exécuté une seule fois) ──────────────────────────
+TEMPLATE_MARKER="$HOME/.gamad-template-applied"
+WORKSPACE_DIR="/home/workspace"
+
+if [ -n "${WORKSPACE_TEMPLATE:-}" ] && [ ! -f "$TEMPLATE_MARKER" ]; then
+    echo "[gamad] Application du template : ${WORKSPACE_TEMPLATE}..."
+    export PATH="$HOME/.npm-global/bin:/usr/local/bin:$PATH"
+
+    case "$WORKSPACE_TEMPLATE" in
+
+    react-vite)
+        if command -v npm >/dev/null 2>&1; then
+            cd "$WORKSPACE_DIR"
+            npm create vite@latest my-app -- --template react --yes 2>/dev/null \
+                && cd my-app && npm install --silent 2>/dev/null \
+                && echo "[gamad] ✓ React + Vite prêt dans my-app/" \
+                || echo "[gamad] ✗ Échec template react-vite"
+        fi
+        ;;
+
+    fastapi)
+        mkdir -p "$WORKSPACE_DIR/my-api"
+        cat > "$WORKSPACE_DIR/my-api/main.py" << 'PYEOF'
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello from GamadCode 🚀"}
+
+@app.get("/items/{item_id}")
+def read_item(item_id: int, q: str | None = None):
+    return {"item_id": item_id, "q": q}
+PYEOF
+        cat > "$WORKSPACE_DIR/my-api/requirements.txt" << 'EOF'
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+EOF
+        cat > "$WORKSPACE_DIR/my-api/README.md" << 'EOF'
+# FastAPI — GamadCode
+
+```bash
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Docs : http://localhost:8000/docs
+EOF
+        if command -v pip3 >/dev/null 2>&1; then
+            pip3 install -r "$WORKSPACE_DIR/my-api/requirements.txt" --quiet 2>/dev/null \
+                && echo "[gamad] ✓ FastAPI + Python prêt dans my-api/" \
+                || echo "[gamad] ✗ pip install échoué (non bloquant)"
+        else
+            echo "[gamad] ✓ FastAPI scaffold créé (pip absent — installer manuellement)"
+        fi
+        ;;
+
+    express-ts)
+        mkdir -p "$WORKSPACE_DIR/my-server"
+        cd "$WORKSPACE_DIR/my-server"
+        if command -v npm >/dev/null 2>&1; then
+            npm init -y --silent 2>/dev/null
+            npm install express typescript @types/node @types/express ts-node-dev --silent 2>/dev/null
+        fi
+        cat > "$WORKSPACE_DIR/my-server/src/index.ts" << 'TSEOF'
+import express, { Request, Response } from 'express';
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+
+app.get('/', (_req: Request, res: Response) => {
+  res.json({ message: 'Hello from GamadCode 🚀' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+TSEOF
+        cat > "$WORKSPACE_DIR/my-server/tsconfig.json" << 'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true
+  }
+}
+EOF
+        # Ajouter script dev dans package.json
+        if command -v node >/dev/null 2>&1; then
+            node -e "
+const fs=require('fs'),f='package.json';
+const p=JSON.parse(fs.readFileSync(f,'utf8'));
+p.scripts=(p.scripts||{});
+p.scripts.dev='ts-node-dev --respawn src/index.ts';
+p.scripts.build='tsc';
+p.scripts.start='node dist/index.js';
+fs.writeFileSync(f,JSON.stringify(p,null,2));
+" 2>/dev/null
+        fi
+        echo "[gamad] ✓ Express + TypeScript prêt dans my-server/"
+        ;;
+
+    esac
+
+    touch "$TEMPLATE_MARKER"
+    echo "[gamad] Template ${WORKSPACE_TEMPLATE} appliqué."
+fi
+
 # ── Lancement du serveur ────────────────────────────────────────────────────
 exec "$OPENVSCODE_SERVER_ROOT/bin/openvscode-server" \
     --host 0.0.0.0 \

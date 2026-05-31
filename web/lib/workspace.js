@@ -68,7 +68,10 @@ const ensureImage = async (image) => {
     }
 };
 
-const createWorkspace = async (userId) => {
+const VALID_TEMPLATES = new Set(['blank', 'react-vite', 'fastapi', 'express-ts']);
+
+const createWorkspace = async (userId, template = 'blank') => {
+    if (!VALID_TEMPLATES.has(template)) template = 'blank';
     // Workspace existant ?
     const existing = await db.query(
         'SELECT * FROM workspaces WHERE user_id = $1',
@@ -106,6 +109,7 @@ const createWorkspace = async (userId) => {
 
     const port     = await getNextPort();
     const envVars  = await getUserEnvVars(userId);
+    if (template !== 'blank') envVars.push(`WORKSPACE_TEMPLATE=${template}`);
     const wsPath   = path.join(WORKSPACE_BASE, String(userId));
 
     // Limites de ressources selon le plan de l'utilisateur
@@ -146,9 +150,9 @@ const createWorkspace = async (userId) => {
     await container.start();
 
     const result = await db.query(
-        `INSERT INTO workspaces (user_id, container_id, port, status, last_activity)
-         VALUES ($1, $2, $3, 'running', NOW()) RETURNING *`,
-        [userId, container.id, port]
+        `INSERT INTO workspaces (user_id, container_id, port, status, last_activity, template)
+         VALUES ($1, $2, $3, 'running', NOW(), $4) RETURNING *`,
+        [userId, container.id, port, template]
     );
 
     return result.rows[0];
@@ -223,4 +227,4 @@ const cloneRepo = async (userId, cloneUrl, repoName) => {
     return containerTarget;
 };
 
-module.exports = { createWorkspace, stopWorkspace, getWorkspaceStatus, cloneRepo };
+module.exports = { createWorkspace, stopWorkspace, getWorkspaceStatus, cloneRepo, VALID_TEMPLATES };

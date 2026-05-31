@@ -597,13 +597,24 @@ app.get('/api/workspace', requireUser, async (req, res) => {
     }
 });
 
+app.get('/api/workspace/templates', (req, res) => {
+    res.json([
+        { id: 'blank',      label: 'Blank',           icon: '📄', desc: 'Workspace vide — configurez tout vous-même.' },
+        { id: 'react-vite', label: 'React + Vite',     icon: '⚛️', desc: 'SPA React avec Vite, ESLint et hot-reload.' },
+        { id: 'fastapi',    label: 'FastAPI + Python', icon: '🐍', desc: 'API REST Python avec FastAPI et Uvicorn.' },
+        { id: 'express-ts', label: 'Express + TypeScript', icon: '🟦', desc: 'Serveur Node.js Express avec TypeScript et ts-node-dev.' },
+    ]);
+});
+
 app.post('/api/workspace/start', requireUser, async (req, res) => {
     loadLibs();
     const userId = req.session.userId;
     if (!userId || !workspaceLib) return res.status(503).json({ error: 'Service non disponible' });
 
+    const template = req.body?.template || 'blank';
+
     try {
-        const ws       = await workspaceLib.createWorkspace(userId);
+        const ws       = await workspaceLib.createWorkspace(userId, template);
         const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
         const token    = generateWsToken(ws.port, userId);
         const url      = `https://${wsDomain}/?wstoken=${token}`;

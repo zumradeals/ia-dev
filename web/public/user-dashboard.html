@@ -138,6 +138,24 @@
   .upgrade-cta strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 2px; }
 
   /* TOAST */
+  /* TEMPLATE MODAL */
+  .tpl-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:990; padding:24px; }
+  .tpl-overlay.open { display:flex; }
+  .tpl-modal { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:32px; width:100%; max-width:680px; max-height:90vh; overflow-y:auto; }
+  .tpl-modal h2 { font-size:20px; font-weight:700; margin-bottom:6px; }
+  .tpl-modal p  { font-size:14px; color:var(--muted); margin-bottom:24px; }
+  .tpl-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; }
+  .tpl-card { background:rgba(255,255,255,.03); border:2px solid var(--border); border-radius:14px; padding:20px; cursor:pointer; transition:all .2s; display:flex; flex-direction:column; gap:8px; }
+  .tpl-card:hover { border-color:rgba(99,102,241,.5); background:rgba(99,102,241,.06); }
+  .tpl-card.selected { border-color:var(--p); background:rgba(99,102,241,.1); }
+  .tpl-card .tpl-icon { font-size:28px; }
+  .tpl-card .tpl-name { font-size:15px; font-weight:700; }
+  .tpl-card .tpl-desc { font-size:12px; color:var(--muted); line-height:1.5; }
+  .tpl-card .tpl-tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tpl-tag { font-size:11px; padding:2px 8px; border-radius:999px; background:rgba(255,255,255,.06); color:var(--muted); }
+  .tpl-actions { display:flex; justify-content:flex-end; gap:10px; }
+  @media (max-width:520px) { .tpl-grid { grid-template-columns:1fr; } }
+
   #toast { position: fixed; bottom: 28px; right: 28px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; font-size: 14px; transform: translateY(80px); opacity: 0; transition: all .3s; z-index: 999; display: flex; align-items: center; gap: 10px; max-width: 340px; }
   #toast.show { transform: translateY(0); opacity: 1; }
   #toast.ok  { border-color: rgba(34,197,94,.4); }
@@ -404,6 +422,23 @@
 
 <div id="toast"></div>
 
+<!-- TEMPLATE SELECTOR MODAL -->
+<div class="tpl-overlay" id="tpl-overlay">
+  <div class="tpl-modal">
+    <h2>Choisissez un template</h2>
+    <p>Le template configure votre workspace au premier démarrage. Ce choix est définitif.</p>
+    <div class="tpl-grid" id="tpl-grid">
+      <!-- Rempli dynamiquement -->
+    </div>
+    <div class="tpl-actions">
+      <button class="btn btn-outline" onclick="closeTplModal()">Annuler</button>
+      <button class="btn btn-primary" id="btn-tpl-confirm" onclick="confirmTemplate()" disabled>
+        Créer le workspace →
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -553,13 +588,60 @@ function updateWorkspaceUI(ws) {
   renderReposPage();
 }
 
+// ── Template selector ─────────────────────────────────────────────────────────
+let _templates    = [];
+let _selectedTpl  = null;
+
 async function startWorkspace() {
+  // Premier lancement (status === 'none') → afficher le sélecteur de template
+  if (!wsData || wsData.status === 'none') {
+    await openTplModal();
+    return;
+  }
+  // Workspace existant → démarrage direct
+  await doStartWorkspace('blank');
+}
+
+async function openTplModal() {
+  if (!_templates.length) {
+    const data = await API.get('/api/workspace/templates');
+    _templates = Array.isArray(data) ? data : [];
+  }
+  _selectedTpl = null;
+  document.getElementById('btn-tpl-confirm').disabled = true;
+  document.getElementById('tpl-grid').innerHTML = _templates.map(t => `
+    <div class="tpl-card" id="tpl-${t.id}" onclick="selectTemplate('${t.id}')">
+      <div class="tpl-icon">${t.icon}</div>
+      <div class="tpl-name">${t.label}</div>
+      <div class="tpl-desc">${t.desc}</div>
+    </div>`).join('');
+  document.getElementById('tpl-overlay').classList.add('open');
+}
+
+function selectTemplate(id) {
+  _selectedTpl = id;
+  document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('tpl-' + id)?.classList.add('selected');
+  document.getElementById('btn-tpl-confirm').disabled = false;
+}
+
+function closeTplModal() {
+  document.getElementById('tpl-overlay').classList.remove('open');
+}
+
+async function confirmTemplate() {
+  if (!_selectedTpl) return;
+  closeTplModal();
+  await doStartWorkspace(_selectedTpl);
+}
+
+async function doStartWorkspace(template) {
   const btn = document.getElementById('btn-start');
   const obBtn = document.getElementById('ob-action-ws');
   [btn, obBtn].forEach(b => { if (b) { b.disabled = true; b.innerHTML = '<span class="spinner"></span> Démarrage…'; } });
 
   try {
-    const data = await API.post('/api/workspace/start', {});
+    const data = await API.post('/api/workspace/start', { template });
     if (data.error) { toast(data.error, false); return; }
     toast('Environnement démarré !');
     await loadWorkspace();
@@ -894,6 +976,7 @@ async function logout() {
 }
 
 init();
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTplModal(); });
 </script>
 </body>
 </html>
