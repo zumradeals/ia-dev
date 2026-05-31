@@ -104,7 +104,7 @@ const createWorkspace = async (userId) => {
     const container = await docker.createContainer({
         Image:      WORKSPACE_IMAGE,
         name:       `gamadcode-${userId}`,
-        Entrypoint: ['/bin/sh', STARTUP_SCRIPT],
+        Entrypoint: ['/bin/sh', '/gamad-startup.sh'],
         Cmd:        [],
         Env:        envVars,
         ExposedPorts: { '8080/tcp': {} },
@@ -112,6 +112,7 @@ const createWorkspace = async (userId) => {
             PortBindings:  { '8080/tcp': [{ HostPort: String(port) }] },
             Binds: [
                 `${wsPath}:/home/workspace`,
+                `${STARTUP_SCRIPT}:/gamad-startup.sh:ro`,
                 `${EXTENSIONS_CONF}:/opt/gamadcode/extensions.conf:ro`
             ],
             RestartPolicy: { Name: 'unless-stopped' }
