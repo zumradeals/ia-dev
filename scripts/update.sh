@@ -17,6 +17,9 @@ require_root
 log_init "update" "maintenance"
 log_section "Mise à jour DevLab"
 
+# ─── Migration config ─────────────────────────
+bash "${DEVLAB_ROOT}/scripts/migrate-config.sh"
+
 DEVLAB_USER="${DEVLAB_USER:-devuser}"
 USER_HOME=$(getent passwd "$DEVLAB_USER" | cut -d: -f6)
 NVM_DIR="${USER_HOME}/.nvm"
