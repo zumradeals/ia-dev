@@ -169,6 +169,7 @@ tbody tr:last-child { border-bottom:none; }
     <div class="nav-item" onclick="goto('extensions')"><span class="icon">🧩</span> Extensions</div>
     <div class="nav-section">Système</div>
     <div class="nav-item" onclick="goto('system')"><span class="icon">⚙️</span> Système</div>
+    <div class="nav-item" onclick="goto('snapshots')"><span class="icon">💾</span> Snapshots</div>
     <div class="nav-item" onclick="goto('settings')"><span class="icon">🔧</span> Paramètres</div>
     <div class="nav-item" onclick="goto('claude')"><span class="icon">🤖</span> Claude Code</div>
     <div class="nav-item" onclick="goto('billing')"><span class="icon">💳</span> Facturation</div>
@@ -262,6 +263,25 @@ tbody tr:last-child { border-bottom:none; }
         <div class="card">
           <div class="card-title">🔧 Services</div>
           <div id="sys-services"><div class="spinner" style="margin:20px auto"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SNAPSHOTS ADMIN -->
+    <div class="section" id="section-snapshots">
+      <div class="section-header">
+        <div><div class="section-title">Snapshots</div><div class="section-sub">Toutes les sauvegardes utilisateurs</div></div>
+        <button class="btn-primary" onclick="loadAdminSnapshots()">↻ Actualiser</button>
+      </div>
+      <div class="card">
+        <div id="admin-snaps-stats" style="display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Utilisateur</th><th>Nom</th><th>Taille</th><th>Date</th><th>Actions</th></tr></thead>
+            <tbody id="admin-snaps-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px"><span class="spinner"></span></td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -491,6 +511,7 @@ function goto(id) {
   document.getElementById(`section-${id}`).classList.add('active');
   if (id === 'system')     loadSystem();
   if (id === 'extensions') loadExtensions();
+  if (id === 'snapshots')  loadAdminSnapshots();
   if (id === 'settings')   loadSettings();
   if (id === 'claude')     loadClaudeSettings();
   if (id === 'workspaces') renderWorkspaces(allUsers);
@@ -613,6 +634,36 @@ function renderWorkspaces(users) {
       <button class="btn-act danger" onclick="resetWs(${u.id},this)">↺ Reset</button>
     </div></td>
   </tr>`).join('');
+}
+
+// ── Snapshots admin ───────────────────────────────────────────────────────────
+async function loadAdminSnapshots() {
+  const data = await API.get('/api/admin/snapshots');
+  if (data.error) { toast(data.error, false); return; }
+
+  const totalSize = data.reduce((a, s) => a + (s.size_bytes || 0), 0);
+  const fmtSize = b => b >= 1e9 ? (b/1e9).toFixed(1)+'Go' : b >= 1e6 ? (b/1e6).toFixed(0)+'Mo' : (b/1024).toFixed(0)+'Ko';
+  document.getElementById('admin-snaps-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total snapshots</div><div class="stat-value blue">${data.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Espace total</div><div class="stat-value yellow">${fmtSize(totalSize)}</div></div>`;
+
+  const tb = document.getElementById('admin-snaps-tbody');
+  if (!data.length) { tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Aucun snapshot</td></tr>`; return; }
+  tb.innerHTML = data.map(s => `<tr>
+    <td style="font-size:13px">${s.email}</td>
+    <td style="font-weight:500">📦 ${s.name}</td>
+    <td style="font-size:13px;color:var(--muted)">${s.sizeFormatted}</td>
+    <td style="font-size:13px;color:var(--muted)">${new Date(s.created_at).toLocaleDateString('fr-FR')}</td>
+    <td><button class="btn-act danger" onclick="adminDeleteSnap(${s.id},this)">🗑</button></td>
+  </tr>`).join('');
+}
+
+async function adminDeleteSnap(id, btn) {
+  if (!confirm('Supprimer définitivement ce snapshot ?')) return;
+  btn.disabled = true;
+  const r = await API.del(`/api/admin/snapshots/${id}`);
+  if (r.error) { toast(r.error, false); btn.disabled = false; return; }
+  toast('Snapshot supprimé'); loadAdminSnapshots();
 }
 
 // ── Extensions ────────────────────────────────────────────────────────────────

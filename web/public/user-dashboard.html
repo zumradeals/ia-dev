@@ -138,6 +138,14 @@
   .upgrade-cta strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 2px; }
 
   /* TOAST */
+  /* SNAPSHOTS */
+  .snap-list { display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .snap-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:10px; flex-wrap:wrap; }
+  .snap-info { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .snap-name { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .snap-meta { font-size:12px; color:var(--muted); }
+  .snap-actions { display:flex; gap:6px; flex-shrink:0; }
+
   .btn-port-quick { font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid var(--border); background:none; color:var(--muted); cursor:pointer; transition:all .15s; }
   .btn-port-quick:hover { border-color:var(--p); color:var(--p); }
 
@@ -418,6 +426,24 @@
     <p style="font-size:12px;color:var(--muted);margin-top:10px">S'applique au prochain démarrage du workspace.</p>
   </div>
 
+  <!-- SNAPSHOTS CARD -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:4px"><span class="icon">💾</span> Snapshots</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Sauvegardez l'état de votre workspace (code + configs, hors node_modules). Arrêtez le workspace avant de restaurer.</p>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+      <input id="snap-name" type="text" placeholder="Nom du snapshot…" maxlength="40"
+        style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:9px;font-size:14px;outline:none">
+      <button class="btn btn-primary btn-sm" onclick="createSnapshot()" id="btn-snap-create">
+        💾 Créer un snapshot
+      </button>
+    </div>
+
+    <div id="snap-list" class="snap-list">
+      <div style="font-size:13px;color:var(--muted);padding:10px 0">Chargement…</div>
+    </div>
+  </div>
+
   <!-- ACCOUNT CARD -->
   <div class="card">
     <div class="card-title" style="margin-bottom:16px"><span class="icon">👤</span> Mon compte</div>
@@ -559,7 +585,7 @@ async function init() {
   // CTA upgrade pour les free
   if (plan === 'free') document.getElementById('upgrade-cta').style.display = 'flex';
 
-  await Promise.all([loadWorkspace(), loadKeys(), loadBilling()]);
+  await Promise.all([loadWorkspace(), loadKeys(), loadBilling(), loadSnapshots()]);
   loadRepos();
   wsInterval = setInterval(loadWorkspace, 10000);
 }
@@ -1013,6 +1039,65 @@ async function startCheckout(plan) {
 async function logout() {
   await fetch('/auth/logout', { method: 'POST' });
   location.href = '/';
+}
+
+// ── Snapshots ────────────────────────��───────────────────────────────────���────
+async function loadSnapshots() {
+  const data = await API.get('/api/workspace/snapshots');
+  renderSnapshots(Array.isArray(data) ? data : []);
+}
+
+function renderSnapshots(snaps) {
+  const el = document.getElementById('snap-list');
+  if (!snaps.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:8px 0">Aucun snapshot — créez-en un pour sauvegarder l\'état actuel.</div>';
+    return;
+  }
+  el.innerHTML = snaps.map(s => `
+    <div class="snap-item" id="snap-row-${s.id}">
+      <div class="snap-info">
+        <div class="snap-name">📦 ${esc(s.name)}</div>
+        <div class="snap-meta">${s.sizeFormatted} · ${new Date(s.created_at).toLocaleString('fr-FR')}</div>
+      </div>
+      <div class="snap-actions">
+        <button class="btn btn-sm btn-outline" onclick="restoreSnapshot(${s.id}, '${esc(s.name)}', this)">↺ Restaurer</button>
+        <button class="btn btn-sm btn-danger"  onclick="deleteSnapshot(${s.id}, this)">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+async function createSnapshot() {
+  const nameEl = document.getElementById('snap-name');
+  const btn    = document.getElementById('btn-snap-create');
+  const name   = nameEl.value.trim() || new Date().toLocaleString('fr-FR');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Création…';
+  try {
+    const r = await API.post('/api/workspace/snapshots', { name });
+    if (r.error) { toast(r.error, false); return; }
+    nameEl.value = '';
+    toast(`Snapshot « ${r.name} » créé (${r.sizeFormatted})`);
+    await loadSnapshots();
+  } finally {
+    btn.disabled = false; btn.innerHTML = '💾 Créer un snapshot';
+  }
+}
+
+async function restoreSnapshot(id, name, btn) {
+  if (!confirm(`Restaurer le snapshot « ${name} » ?\n\nLe contenu actuel du workspace sera remplacé.\nArrêtez d'abord le workspace.`)) return;
+  btn.disabled = true; btn.textContent = '…';
+  const r = await API.post(`/api/workspace/snapshots/${id}/restore`, {});
+  btn.disabled = false; btn.textContent = '↺ Restaurer';
+  if (r.error) { toast(r.error, false); return; }
+  toast('Snapshot restauré — redémarrez le workspace');
+}
+
+async function deleteSnapshot(id, btn) {
+  if (!confirm('Supprimer définitivement ce snapshot ?')) return;
+  btn.disabled = true;
+  const r = await API.del(`/api/workspace/snapshots/${id}`);
+  if (r.error) { toast(r.error, false); btn.disabled = false; return; }
+  document.getElementById('snap-row-' + id)?.remove();
+  toast('Snapshot supprimé');
 }
 
 // ── Preview URL ───────────────────────────────────────────────────────────────

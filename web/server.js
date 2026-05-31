@@ -667,6 +667,60 @@ app.post('/api/workspace/preview/regenerate', requireUser, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Snapshots ─────────────────────────────────────────────────────────────────
+let snapshotLib = null;
+const loadSnapshot = () => { if (!snapshotLib) snapshotLib = require('./lib/snapshot'); };
+
+app.get('/api/workspace/snapshots', requireUser, async (req, res) => {
+    loadSnapshot();
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+    try { res.json(await snapshotLib.list(userId)); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/workspace/snapshots', requireUser, async (req, res) => {
+    loadSnapshot();
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+    const { name } = req.body;
+    try { res.json(await snapshotLib.create(userId, name)); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.post('/api/workspace/snapshots/:id/restore', requireUser, async (req, res) => {
+    loadSnapshot();
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+    try { res.json(await snapshotLib.restore(userId, parseInt(req.params.id, 10))); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/workspace/snapshots/:id', requireUser, async (req, res) => {
+    loadSnapshot();
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+    try { res.json(await snapshotLib.remove(userId, parseInt(req.params.id, 10))); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// ── Admin snapshots ───────────────────────────────────────────────────────────
+app.get('/api/admin/snapshots', requireUser, requireAdmin, async (req, res) => {
+    loadSnapshot();
+    try { res.json(await snapshotLib.listAll()); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/admin/snapshots/:id', requireUser, requireAdmin, async (req, res) => {
+    loadSnapshot(); loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    try {
+        const r = await db.query('SELECT user_id FROM snapshots WHERE id = $1', [parseInt(req.params.id, 10)]);
+        if (!r.rows.length) return res.status(404).json({ error: 'Introuvable' });
+        res.json(await snapshotLib.remove(r.rows[0].user_id, parseInt(req.params.id, 10)));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/workspace/start', requireUser, async (req, res) => {
     loadLibs();
     const userId = req.session.userId;
