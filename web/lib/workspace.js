@@ -96,6 +96,8 @@ const createWorkspace = async (userId) => {
     const wsPath  = path.join(WORKSPACE_BASE, String(userId));
 
     fs.mkdirSync(wsPath, { recursive: true });
+    // Le user openvscode-server a uid/gid 1000 — le volume doit lui appartenir
+    try { fs.chownSync(wsPath, 1000, 1000); } catch {}
     await ensureImage(WORKSPACE_IMAGE);
 
     const STARTUP_SCRIPT    = process.env.WORKSPACE_STARTUP_SCRIPT    || '/opt/gamadcode/start-workspace.sh';

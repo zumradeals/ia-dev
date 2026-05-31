@@ -8,6 +8,9 @@ SERVER_VER=$("$OPENVSCODE_SERVER_ROOT/bin/openvscode-server" --version 2>/dev/nu
 MARKER="$HOME/.gamad-setup-${EXT_HASH:0:8}-${SERVER_VER}"
 
 if [ ! -f "$MARKER" ]; then
+    # Corriger les permissions du volume (peut être root si clonage fait en root)
+    sudo chown -R "$(id -u):$(id -g)" "$HOME" 2>/dev/null || true
+
     # Nettoyer les anciens marqueurs
     rm -f "$HOME/.gamad-setup-"* 2>/dev/null
     echo "[gamad] Configuration du workspace (${SERVER_VER})..."

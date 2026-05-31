@@ -115,6 +115,16 @@ tbody tr:last-child { border-bottom:none; }
 #toast.ok  { border-color:rgba(34,197,94,.4); }
 #toast.err { border-color:rgba(248,113,113,.4); }
 
+/* CATALOGUE EXTENSIONS */
+.cat-section { margin-bottom:18px; }
+.cat-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:10px; }
+.ext-grid { display:flex; flex-wrap:wrap; gap:8px; }
+.ext-pill { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:10px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid var(--border); background:rgba(255,255,255,.03); transition:all .15s; user-select:none; }
+.ext-pill:hover { border-color:var(--p); color:var(--p); }
+.ext-pill.active { background:rgba(99,102,241,.12); border-color:rgba(99,102,241,.5); color:var(--p); }
+.ext-pill.active::before { content:'✓ '; font-weight:700; }
+.ext-pill .ext-icon { font-size:16px; }
+
 /* FACTURATION placeholder */
 .coming-soon { text-align:center; padding:60px 20px; color:var(--muted); }
 .coming-soon .icon { font-size:48px; margin-bottom:16px; }
@@ -197,8 +207,18 @@ tbody tr:last-child { border-bottom:none; }
       <div class="section-header">
         <div><div class="section-title">Extensions VS Code</div><div class="section-sub">Installées automatiquement dans chaque nouveau workspace</div></div>
       </div>
+
+      <!-- Catalogue par catégories -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">📦 Catalogue</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Cliquez sur une extension pour l'ajouter ou la retirer de la liste active.</p>
+        <div id="ext-catalogue"></div>
+      </div>
+
+      <!-- Éditeur brut -->
       <div class="card">
-        <p class="ext-hint">Une extension par ligne au format <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">Publisher.extensionId</code>. Les lignes commençant par <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">#</code> sont des commentaires.<br>Les changements s'appliquent aux <strong>nouveaux workspaces</strong> et aux workspaces existants au prochain redémarrage de leur conteneur.</p>
+        <div class="card-title">✏️ Éditeur</div>
+        <p class="ext-hint">Une extension par ligne : <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">Publisher.extensionId</code>. Lignes <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">#</code> = commentaires.<br>S'applique aux <strong>nouveaux workspaces</strong> et aux existants au prochain redémarrage de conteneur.</p>
         <textarea class="ext-editor" id="ext-content" spellcheck="false" placeholder="Chargement…"></textarea>
         <div style="display:flex;gap:10px;margin-top:14px">
           <button class="btn-primary" onclick="saveExtensions()">💾 Sauvegarder</button>
@@ -268,6 +288,7 @@ function goto(id) {
   document.getElementById(`section-${id}`).classList.add('active');
   if (id === 'system')     loadSystem();
   if (id === 'extensions') loadExtensions();
+  if (id === 'workspaces') renderWorkspaces(allUsers);
   if (id === 'workspaces') renderWorkspaces(allUsers);
 }
 
@@ -391,15 +412,105 @@ function renderWorkspaces(users) {
 }
 
 // ── Extensions ────────────────────────────────────────────────────────────────
+const EXT_CATALOGUE = [
+  { cat:'🤖 IA & Assistants', exts:[
+    { id:'Anthropic.claude-code',            label:'Claude Code',         icon:'🤖' },
+    { id:'Continue.continue',                label:'Continue (Codex/GPT)',  icon:'✨' },
+  ]},
+  { cat:'🐙 Git & GitHub', exts:[
+    { id:'GitHub.vscode-pull-request-github',label:'GitHub Pull Requests', icon:'🐙' },
+    { id:'eamodio.gitlens',                  label:'GitLens',              icon:'🔍' },
+    { id:'GitHub.copilot',                   label:'GitHub Copilot',       icon:'🚀' },
+  ]},
+  { cat:'🌐 Web (HTML/CSS/JS/TS)', exts:[
+    { id:'esbenp.prettier-vscode',           label:'Prettier',             icon:'💅' },
+    { id:'dbaeumer.vscode-eslint',           label:'ESLint',               icon:'🔧' },
+    { id:'ms-vscode.vscode-typescript-next', label:'TypeScript',           icon:'🔷' },
+    { id:'bradlc.vscode-tailwindcss',        label:'Tailwind CSS',         icon:'🎨' },
+    { id:'ritwickdey.LiveServer',            label:'Live Server',          icon:'⚡' },
+    { id:'formulahendry.auto-rename-tag',    label:'Auto Rename Tag',      icon:'🏷️' },
+    { id:'christian-kohler.path-intellisense',label:'Path IntelliSense',   icon:'📂' },
+  ]},
+  { cat:'🐍 Langages', exts:[
+    { id:'ms-python.python',                 label:'Python',               icon:'🐍' },
+    { id:'rust-lang.rust-analyzer',          label:'Rust Analyzer',        icon:'🦀' },
+    { id:'golang.go',                        label:'Go',                   icon:'🐹' },
+    { id:'ms-vscode.cpptools',               label:'C/C++',                icon:'⚙️' },
+  ]},
+  { cat:'🎨 UI & Thèmes', exts:[
+    { id:'PKief.material-icon-theme',        label:'Material Icons',       icon:'📁' },
+    { id:'GitHub.github-vscode-theme',       label:'GitHub Theme',         icon:'🌙' },
+    { id:'zhuangtongfa.material-theme',      label:'One Dark Pro',         icon:'🎭' },
+  ]},
+];
+
+function getActiveExtIds(content) {
+  return new Set(
+    (content || '').split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'))
+  );
+}
+
+function renderCatalogue(content) {
+  const active = getActiveExtIds(content);
+  const el = document.getElementById('ext-catalogue');
+  el.innerHTML = EXT_CATALOGUE.map(cat => `
+    <div class="cat-section">
+      <div class="cat-label">${cat.cat}</div>
+      <div class="ext-grid">
+        ${cat.exts.map(e => `
+          <div class="ext-pill ${active.has(e.id)?'active':''}" onclick="toggleExt('${e.id}')" title="${e.id}">
+            <span class="ext-icon">${e.icon}</span>${e.label}
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function toggleExt(id) {
+  const ta = document.getElementById('ext-content');
+  let lines = ta.value.split('\n');
+  const activeIds = getActiveExtIds(ta.value);
+
+  if (activeIds.has(id)) {
+    // Retirer — supprimer la ligne
+    lines = lines.filter(l => l.trim() !== id);
+  } else {
+    // Ajouter — chercher la bonne section dans le catalogue
+    const cat = EXT_CATALOGUE.find(c => c.exts.some(e => e.id === id));
+    const catLabel = cat ? `# ── ${cat.cat.replace(/^.. /,'')} ` : '# ── Autres ';
+    const header = catLabel + '─'.repeat(Math.max(2, 76 - catLabel.length));
+
+    // Trouver si la section existe déjà dans le texte
+    const secIdx = lines.findIndex(l => l.includes(cat?.cat?.replace(/^.. /,'') || ''));
+    if (secIdx >= 0) {
+      // Insérer après le dernier élément de cette section
+      let insertAt = secIdx + 1;
+      while (insertAt < lines.length && lines[insertAt].trim() && !lines[insertAt].startsWith('#')) insertAt++;
+      lines.splice(insertAt, 0, id);
+    } else {
+      if (lines[lines.length-1] !== '') lines.push('');
+      lines.push(header);
+      lines.push(id);
+    }
+  }
+
+  ta.value = lines.join('\n');
+  renderCatalogue(ta.value);
+}
+
 async function loadExtensions() {
   const r = await API.get('/api/admin/extensions');
-  document.getElementById('ext-content').value = r.content || '';
+  const content = r.content || '';
+  document.getElementById('ext-content').value = content;
+  renderCatalogue(content);
 }
 
 async function saveExtensions() {
   const content = document.getElementById('ext-content').value;
   const r = await API.put('/api/admin/extensions', { content });
   if (r.error) { toast(r.error, false); return; }
+  renderCatalogue(content);
   toast('Extensions sauvegardées');
 }
 
