@@ -104,7 +104,7 @@ const createWorkspace = async (userId) => {
     const container = await docker.createContainer({
         Image:      WORKSPACE_IMAGE,
         name:       `gamadcode-${userId}`,
-        Entrypoint: ['/bin/sh', '/gamad-startup.sh'],
+        Entrypoint: ['/usr/bin/bash', '/gamad-startup.sh'],
         Cmd:        [],
         Env:        envVars,
         ExposedPorts: { '8080/tcp': {} },
