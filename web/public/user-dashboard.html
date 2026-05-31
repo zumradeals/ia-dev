@@ -526,8 +526,8 @@
     <!-- CTA upgrade (free users) -->
     <div class="upgrade-cta" id="upgrade-cta" style="display:none">
       <div>
-        <strong>Passez à Pro — 9 900 XOF/mois</strong>
-        <p>2 CPU · 1 GB RAM · 50 dépôts · démarrage prioritaire.</p>
+        <strong id="upgrade-cta-title">Passez à Pro</strong>
+        <p id="upgrade-cta-desc">2 CPU · 1 GB RAM · 50 dépôts · démarrage prioritaire.</p>
       </div>
       <button class="btn btn-primary btn-sm" id="btn-upgrade-pro" onclick="startCheckout('pro')">
         Passer à Pro →
@@ -1263,10 +1263,25 @@ function timeAgo(iso, long = false) {
 // ── Billing ───────────────────────────────────────────────────────────────────
 async function loadBilling() {
   try {
-    const data = await API.get('/api/billing');
+    const [data, plans] = await Promise.all([
+      API.get('/api/billing'),
+      API.get('/api/workspace/plans').catch(() => null),
+    ]);
     const upgradeCta  = document.getElementById('upgrade-cta');
     const subInfo     = document.getElementById('subscription-info');
     const subText     = document.getElementById('subscription-text');
+
+    // Mettre à jour le prix dynamiquement depuis les plans DB
+    if (plans && Array.isArray(plans)) {
+      const pro = plans.find(p => p.name === 'pro');
+      if (pro) {
+        const priceStr = pro.price_month ? pro.price_month.toLocaleString('fr-FR') + ' XOF/mois' : 'Gratuit';
+        const title = document.getElementById('upgrade-cta-title');
+        const desc  = document.getElementById('upgrade-cta-desc');
+        if (title) title.textContent = `Passez à ${pro.label || 'Pro'} — ${priceStr}`;
+        if (desc)  desc.textContent  = `${pro.cpu_limit} CPU · ${pro.ram_limit >= 1024 ? (pro.ram_limit/1024).toFixed(0)+' GB' : pro.ram_limit+' MB'} RAM · ${pro.max_repos === -1 ? 'illimité' : pro.max_repos} dépôts`;
+      }
+    }
 
     if (data.plan && data.plan !== 'free' && data.status === 'active') {
       if (upgradeCta) upgradeCta.style.display = 'none';

@@ -11,10 +11,10 @@ const GENIUS_PATH   = '/api/v1/merchant';
 const API_KEY       = process.env.GENIUSPAY_API_KEY    || '';
 const API_SECRET    = process.env.GENIUSPAY_API_SECRET || '';
 
-// Prix des plans en XOF (min GeniusPay = 200 XOF)
+// Prix et labels par défaut (utilisés si la DB n'est pas disponible)
 const PLAN_PRICES = {
-    pro:        9900,   // ≈ 15 EUR
-    enterprise: 49000   // ≈ 75 EUR
+    pro:        9900,
+    enterprise: 49000
 };
 
 const PLAN_LABELS = {
@@ -50,14 +50,18 @@ const geniusRequest = (method, endpoint, body = null) => new Promise((resolve, r
 
 // ── Créer une session de checkout ─────────────────────────────────────────────
 // Retourne { reference, checkout_url } — rediriger l'utilisateur vers checkout_url
-const createCheckout = async ({ plan, userId, userEmail, userName, successUrl, errorUrl }) => {
-    if (!PLAN_PRICES[plan]) throw new Error('Plan inconnu : ' + plan);
+const createCheckout = async ({ plan, amount, label, userId, userEmail, userName, successUrl, errorUrl }) => {
     if (!API_KEY || !API_SECRET) throw new Error('Clés GeniusPay non configurées (GENIUSPAY_API_KEY / GENIUSPAY_API_SECRET)');
 
+    const finalAmount = amount || PLAN_PRICES[plan];
+    const finalLabel  = label  || PLAN_LABELS[plan] || plan;
+
+    if (!finalAmount || finalAmount < 200) throw new Error(`Montant invalide pour le plan ${plan} : ${finalAmount} XOF (minimum 200)`);
+
     const { status, body } = await geniusRequest('POST', '/payments', {
-        amount:      PLAN_PRICES[plan],
+        amount:      finalAmount,
         currency:    'XOF',
-        description: PLAN_LABELS[plan],
+        description: finalLabel,
         customer: {
             name:  userName  || userEmail,
             email: userEmail || ''
@@ -71,14 +75,19 @@ const createCheckout = async ({ plan, userId, userEmail, userName, successUrl, e
         }
     });
 
-    if (status !== 201 || !body.success) {
-        const msg = body.error?.message || JSON.stringify(body);
+    // GeniusPay peut retourner 200 ou 201 selon les versions
+    if (!(status === 200 || status === 201) || !body.success) {
+        const msg = body?.error?.message || body?.message || JSON.stringify(body).slice(0, 300);
         throw new Error('GeniusPay erreur ' + status + ' : ' + msg);
     }
 
+    const data = body.data || body;
+    const checkoutUrl = data.checkout_url || data.payment_url || data.redirect_url || data.url;
+    if (!checkoutUrl) throw new Error('GeniusPay : URL de paiement introuvable dans la réponse — ' + JSON.stringify(data).slice(0, 200));
+
     return {
-        reference:    body.data.reference,
-        checkout_url: body.data.checkout_url || body.data.payment_url
+        reference:    data.reference || data.id || '',
+        checkout_url: checkoutUrl
     };
 };
 

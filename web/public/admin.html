@@ -132,6 +132,18 @@ tbody tr:last-child { border-bottom:none; }
 .secret-badge { font-size:12px; padding:3px 10px; border-radius:999px; background:rgba(34,197,94,.1); color:var(--green); border:1px solid rgba(34,197,94,.3); }
 .secret-badge.empty { background:rgba(248,113,113,.1); color:var(--red); border-color:rgba(248,113,113,.3); }
 
+/* PLAN CARDS */
+.plan-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:22px; }
+.plan-card-title { font-size:16px; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+.plan-card-sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
+.plan-field { margin-bottom:12px; }
+.plan-field label { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; display:block; margin-bottom:5px; }
+.plan-input { background:rgba(255,255,255,.04); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:8px; font-size:14px; outline:none; width:100%; }
+.plan-input:focus { border-color:var(--p); }
+.plan-input[readonly] { opacity:.5; cursor:not-allowed; }
+.plan-price-display { font-size:22px; font-weight:800; color:var(--p); margin-bottom:2px; }
+.plan-price-sub { font-size:12px; color:var(--muted); }
+
 /* CATALOGUE EXTENSIONS */
 .cat-section { margin-bottom:18px; }
 .cat-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:10px; }
@@ -495,12 +507,47 @@ tbody tr:last-child { border-bottom:none; }
 
     <!-- FACTURATION -->
     <div class="section" id="section-billing">
-      <div class="coming-soon">
-        <div class="icon">💳</div>
-        <h3>Facturation — Phase 2</h3>
-        <p>Intégration Geniuspay prévue. Les bases de données (table <code>plans</code>, colonne <code>users.plan</code>) sont déjà en place.</p>
-        <br>
-        <p style="margin-top:8px">Plans disponibles : <strong>Gratuit</strong> · <strong>Pro</strong> · <strong>Entreprise</strong></p>
+      <div class="section-header">
+        <div><div class="section-title">Facturation</div><div class="section-sub">Plans tarifaires · Limites de ressources · GeniusPay</div></div>
+        <button class="btn-primary" onclick="loadBillingAdmin()">↻ Actualiser</button>
+      </div>
+
+      <!-- Plans -->
+      <div id="billing-plans-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px">
+        <div class="spinner" style="margin:30px auto;grid-column:1/-1"></div>
+      </div>
+
+      <!-- GeniusPay keys -->
+      <div class="card">
+        <div class="card-title">🔐 Clés GeniusPay</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Ces clés sont utilisées pour créer les sessions de paiement et vérifier les webhooks.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 20px">
+          <div class="field-row">
+            <label>API Key (pk_live_…)</label>
+            <div class="secret-row">
+              <input class="field-input" id="gp-api-key" type="password" placeholder="Laisser vide pour ne pas modifier" style="max-width:300px">
+              <span class="secret-badge empty" id="gp-key-badge">Non configuré</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>API Secret (sk_live_…)</label>
+            <div class="secret-row">
+              <input class="field-input" id="gp-api-secret" type="password" placeholder="Laisser vide pour ne pas modifier" style="max-width:300px">
+              <span class="secret-badge empty" id="gp-secret-badge">Non configuré</span>
+            </div>
+          </div>
+          <div class="field-row" style="grid-column:1/-1">
+            <label>Webhook Secret (whsec_…)</label>
+            <div class="secret-row">
+              <input class="field-input" id="gp-webhook" type="password" placeholder="Laisser vide pour ne pas modifier" style="max-width:360px">
+              <span class="secret-badge empty" id="gp-webhook-badge">Non configuré</span>
+            </div>
+            <span class="field-hint">URL webhook à configurer chez GeniusPay : <code id="gp-webhook-url" style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px">—</code></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn-primary" onclick="saveGeniuspayKeys()">💾 Sauvegarder les clés</button>
+        </div>
       </div>
     </div>
 
@@ -536,6 +583,7 @@ function goto(id) {
   if (id === 'extensions') loadExtensions();
   if (id === 'snapshots')  loadAdminSnapshots();
   if (id === 'metrics')    loadAdminMetrics();
+  if (id === 'billing')    loadBillingAdmin();
   if (id === 'settings')   loadSettings();
   if (id === 'claude')     loadClaudeSettings();
   if (id === 'workspaces') renderWorkspaces(allUsers);
@@ -658,6 +706,100 @@ function renderWorkspaces(users) {
       <button class="btn-act danger" onclick="resetWs(${u.id},this)">↺ Reset</button>
     </div></td>
   </tr>`).join('');
+}
+
+// ── Facturation admin ─────────────────────────────────────────────────────────
+const PLAN_META = {
+  free:       { icon: '🆓', color: 'var(--muted)',   editable: false },
+  pro:        { icon: '⚡', color: 'var(--p)',        editable: true  },
+  enterprise: { icon: '🏢', color: 'var(--yellow)',   editable: true  },
+};
+
+async function loadBillingAdmin() {
+  const [plans, settings] = await Promise.all([
+    API.get('/api/admin/plans'),
+    API.get('/api/admin/settings'),
+  ]);
+
+  // GeniusPay badges
+  if (settings.geniuspay) {
+    setBadge('gp-key-badge',     settings.geniuspay.hasKey);
+    setBadge('gp-secret-badge',  settings.geniuspay.hasSecret);
+    setBadge('gp-webhook-badge', settings.geniuspay.hasWebhook);
+  }
+  const uiDomain = settings.general?.uiDomain || location.hostname;
+  const webhookUrl = document.getElementById('gp-webhook-url');
+  if (webhookUrl) webhookUrl.textContent = `https://${uiDomain}/api/billing/webhook`;
+
+  if (!Array.isArray(plans)) { toast('Erreur chargement plans', false); return; }
+
+  const grid = document.getElementById('billing-plans-grid');
+  grid.innerHTML = plans.map(p => {
+    const meta = PLAN_META[p.name] || { icon: '📦', color: 'var(--text)', editable: true };
+    const readonlyFree = p.name === 'free' ? 'readonly' : '';
+    const priceXof  = p.price_month || 0;
+    return `<div class="plan-card">
+      <div class="plan-card-title" style="color:${meta.color}">${meta.icon} ${p.label || p.name}</div>
+      <div class="plan-card-sub">${p.name === 'free' ? 'Plan de base — non modifiable' : 'Cliquez Sauvegarder pour appliquer'}</div>
+
+      <div class="plan-field">
+        <label>Nom affiché</label>
+        <input class="plan-input" id="plan-${p.name}-label" value="${p.label || ''}" ${readonlyFree}>
+      </div>
+      <div class="plan-field">
+        <label>Prix mensuel (XOF)</label>
+        <input class="plan-input" id="plan-${p.name}-price" type="number" value="${priceXof}" min="0" ${readonlyFree}>
+        <div class="plan-price-sub" style="margin-top:4px;font-size:12px;color:var(--muted)">${priceXof > 0 ? `≈ ${(priceXof/655).toFixed(0)} EUR` : 'Gratuit'}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="plan-field">
+          <label>CPU (vCPU)</label>
+          <input class="plan-input" id="plan-${p.name}-cpu" type="number" step="0.5" value="${p.cpu_limit}" min="0.1" ${readonlyFree}>
+        </div>
+        <div class="plan-field">
+          <label>RAM (MB)</label>
+          <input class="plan-input" id="plan-${p.name}-ram" type="number" value="${p.ram_limit}" min="128" step="128" ${readonlyFree}>
+        </div>
+        <div class="plan-field" style="grid-column:1/-1">
+          <label>Repos max (-1 = illimité)</label>
+          <input class="plan-input" id="plan-${p.name}-repos" type="number" value="${p.max_repos}" min="-1" ${readonlyFree}>
+        </div>
+      </div>
+      ${meta.editable ? `<button class="btn-primary" style="width:100%;margin-top:4px" onclick="savePlan('${p.name}')">💾 Sauvegarder</button>` : `<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">Plan gratuit — non modifiable</div>`}
+    </div>`;
+  }).join('');
+}
+
+async function savePlan(name) {
+  const get = id => document.getElementById(id)?.value;
+  const data = {
+    label:       get(`plan-${name}-label`),
+    price_month: get(`plan-${name}-price`),
+    cpu_limit:   get(`plan-${name}-cpu`),
+    ram_limit:   get(`plan-${name}-ram`),
+    max_repos:   get(`plan-${name}-repos`),
+  };
+  const r = await API.put(`/api/admin/plans/${name}`, data);
+  if (r.error) { toast(r.error, false); return; }
+  toast(`Plan ${name} mis à jour`);
+  loadBillingAdmin();
+}
+
+async function saveGeniuspayKeys() {
+  const data = {
+    apiKey:        document.getElementById('gp-api-key').value,
+    apiSecret:     document.getElementById('gp-api-secret').value,
+    webhookSecret: document.getElementById('gp-webhook').value,
+  };
+  const r = await API.put('/api/admin/settings', { section: 'geniuspay', data });
+  if (r.error) { toast(r.error, false); return; }
+  document.getElementById('gp-api-key').value    = '';
+  document.getElementById('gp-api-secret').value = '';
+  document.getElementById('gp-webhook').value    = '';
+  if (data.apiKey)        setBadge('gp-key-badge',     true);
+  if (data.apiSecret)     setBadge('gp-secret-badge',  true);
+  if (data.webhookSecret) setBadge('gp-webhook-badge', true);
+  toast('Clés GeniusPay sauvegardées');
 }
 
 // ── Métriques admin ───────────────────────────────────────────────────────────

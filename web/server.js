@@ -641,6 +641,16 @@ app.get('/api/workspace', requireUser, async (req, res) => {
     }
 });
 
+// Plans publics (prix + features) — utilisés dans le dashboard user
+app.get('/api/workspace/plans', async (req, res) => {
+    loadLibs();
+    if (!db) return res.json([]);
+    try {
+        const r = await db.query('SELECT name, label, price_month, cpu_limit, ram_limit, max_repos FROM plans ORDER BY price_month ASC');
+        res.json(r.rows);
+    } catch { res.json([]); }
+});
+
 app.get('/api/workspace/templates', (req, res) => {
     res.json([
         { id: 'blank',      label: 'Blank',           icon: '📄', desc: 'Workspace vide — configurez tout vous-même.' },
@@ -941,7 +951,10 @@ app.post('/api/billing/checkout', requireUser, async (req, res) => {
     if (!['pro', 'enterprise'].includes(plan)) return res.status(400).json({ error: 'Plan invalide' });
 
     try {
-        const user = await db.query('SELECT email, name FROM users WHERE id = $1', [userId]);
+        const [user, planRow] = await Promise.all([
+            db.query('SELECT email, name FROM users WHERE id = $1', [userId]),
+            db.query('SELECT price_month, label FROM plans WHERE name = $1', [plan]),
+        ]);
         if (!user.rows.length) return res.status(404).json({ error: 'Utilisateur introuvable' });
 
         const uiDomain = process.env.GAMADCODE_UI_DOMAIN || process.env.GAMADCODE_DOMAIN || `localhost:${PORT}`;
@@ -949,6 +962,8 @@ app.post('/api/billing/checkout', requireUser, async (req, res) => {
 
         const session = await paymentLib.createCheckout({
             plan,
+            amount:     planRow.rows[0]?.price_month || undefined,
+            label:      planRow.rows[0]?.label       || undefined,
             userId,
             userEmail:  user.rows[0].email,
             userName:   user.rows[0].name,
@@ -1053,6 +1068,41 @@ app.post('/api/billing/webhook', async (req, res) => {
     }
 
     res.json({ received: true });
+});
+
+// ── Admin : gestion des plans de facturation ──────────────────────────────────
+app.get('/api/admin/plans', requireUser, requireAdmin, async (req, res) => {
+    loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    try {
+        const r = await db.query('SELECT * FROM plans ORDER BY id');
+        res.json(r.rows);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/plans/:name', requireUser, requireAdmin, async (req, res) => {
+    loadLibs();
+    if (!db) return res.status(503).json({ error: 'DB non disponible' });
+    const { name } = req.params;
+    if (!['free', 'pro', 'enterprise'].includes(name))
+        return res.status(400).json({ error: 'Plan inconnu' });
+
+    const { label, price_month, cpu_limit, ram_limit, max_repos } = req.body;
+    const fields = [], vals = [];
+
+    if (label       !== undefined) { fields.push(`label=$${fields.length+1}`);       vals.push(label); }
+    if (price_month !== undefined) { fields.push(`price_month=$${fields.length+1}`); vals.push(parseInt(price_month, 10)); }
+    if (cpu_limit   !== undefined) { fields.push(`cpu_limit=$${fields.length+1}`);   vals.push(parseFloat(cpu_limit)); }
+    if (ram_limit   !== undefined) { fields.push(`ram_limit=$${fields.length+1}`);   vals.push(parseInt(ram_limit, 10)); }
+    if (max_repos   !== undefined) { fields.push(`max_repos=$${fields.length+1}`);   vals.push(parseInt(max_repos, 10)); }
+
+    if (!fields.length) return res.status(400).json({ error: 'Rien à modifier' });
+    vals.push(name);
+
+    try {
+        await db.query(`UPDATE plans SET ${fields.join(',')} WHERE name=$${vals.length}`, vals);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── API Keys ──────────────────────────────────────────────────────────────────
@@ -1451,6 +1501,11 @@ app.get('/api/admin/settings', requireUser, requireAdmin, (req, res) => {
         anthropic: {
             hasKey: !!(sec.ANTHROPIC_API_KEY),
         },
+        geniuspay: {
+            hasKey:     !!(sec.GENIUSPAY_API_KEY),
+            hasSecret:  !!(sec.GENIUSPAY_API_SECRET),
+            hasWebhook: !!(sec.GENIUSPAY_WEBHOOK_SECRET),
+        },
     });
 });
 
@@ -1482,6 +1537,10 @@ app.put('/api/admin/settings', requireUser, requireAdmin, (req, res) => {
         if (data.secret      !== undefined && data.secret !== '') secretPatches.GITHUB_CLIENT_SECRET = data.secret;
     } else if (section === 'anthropic') {
         if (data.apiKey !== undefined && data.apiKey !== '') secretPatches.ANTHROPIC_API_KEY = data.apiKey;
+    } else if (section === 'geniuspay') {
+        if (data.apiKey     !== undefined && data.apiKey     !== '') secretPatches.GENIUSPAY_API_KEY     = data.apiKey;
+        if (data.apiSecret  !== undefined && data.apiSecret  !== '') secretPatches.GENIUSPAY_API_SECRET  = data.apiSecret;
+        if (data.webhookSecret !== undefined && data.webhookSecret !== '') secretPatches.GENIUSPAY_WEBHOOK_SECRET = data.webhookSecret;
     } else {
         return res.status(400).json({ error: 'Section inconnue' });
     }
