@@ -164,6 +164,20 @@
 
 <main>
 
+  <!-- BANNER VÉRIFICATION EMAIL -->
+  <div id="verify-banner" style="display:none;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div style="font-size:14px;color:#fbbf24">
+      <strong>📧 Vérifiez votre adresse email</strong>
+      <span style="color:#94a3b8;margin-left:8px">Un email de confirmation vous a été envoyé.</span>
+    </div>
+    <button onclick="resendVerification(this)" style="padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(251,191,36,.4);background:none;color:#fbbf24;white-space:nowrap">Renvoyer l'email</button>
+  </div>
+
+  <!-- BANNER SUCCÈS VÉRIFICATION -->
+  <div id="verified-banner" style="display:none;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px;font-size:14px;color:#22c55e">
+    ✅ <strong>Email vérifié avec succès !</strong>
+  </div>
+
   <!-- ONBOARDING -->
   <div class="onboarding-card" id="onboarding" style="display:none">
     <div class="onboarding-title">🚀 Démarrez en 3 étapes</div>
@@ -453,6 +467,16 @@ async function init() {
   planBadge.textContent = plan;
   planBadge.className = 'plan-badge ' + plan;
 
+  // Banner vérification email
+  if (me.emailVerified === false) {
+    document.getElementById('verify-banner').style.display = 'flex';
+  }
+  // Banner succès si ?verified=1 dans l'URL
+  if (new URLSearchParams(location.search).get('verified') === '1') {
+    document.getElementById('verified-banner').style.display = 'block';
+    history.replaceState({}, '', '/my');
+  }
+
   // Modèle Claude
   const sel = document.getElementById('user-model-select');
   if (sel && me.claudeModel) sel.value = me.claudeModel;
@@ -648,6 +672,18 @@ function toggleKeyForm(provider) {
   const form = document.getElementById('form-' + provider);
   form.classList.toggle('open');
   if (form.classList.contains('open')) document.getElementById('input-' + provider).focus();
+}
+
+async function resendVerification(btn) {
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    const r = await API.post('/api/auth/resend-verification', {});
+    if (r.error) { btn.textContent = r.error; return; }
+    btn.textContent = '✓ Email envoyé';
+  } catch {
+    btn.textContent = 'Erreur réseau';
+    btn.disabled = false;
+  }
 }
 
 async function saveUserModel() {

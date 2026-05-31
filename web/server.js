@@ -353,10 +353,10 @@ app.get('/api/me', async (req, res) => {
         loadLibs();
         if (!db) return res.json({ authenticated: true, type: 'user', email: req.session.userEmail });
         try {
-            const r = await db.query('SELECT id, email, name, is_admin, plan, claude_model, created_at FROM users WHERE id = $1', [req.session.userId]);
+            const r = await db.query('SELECT id, email, name, is_admin, plan, claude_model, email_verified, created_at FROM users WHERE id = $1', [req.session.userId]);
             if (!r.rows.length) { req.session.destroy(); return res.json({ authenticated: false }); }
             const u = r.rows[0];
-            return res.json({ authenticated: true, type: 'user', userId: u.id, email: u.email, name: u.name, isAdmin: u.is_admin, plan: u.plan || 'free', claudeModel: u.claude_model || null, createdAt: u.created_at });
+            return res.json({ authenticated: true, type: 'user', userId: u.id, email: u.email, name: u.name, isAdmin: u.is_admin, plan: u.plan || 'free', claudeModel: u.claude_model || null, emailVerified: u.email_verified !== false, createdAt: u.created_at });
         } catch (e) {
             return res.json({ authenticated: true, type: 'user', email: req.session.userEmail });
         }
@@ -424,13 +424,119 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Réponse au captcha incorrecte' });
 
     try {
-        const user = await authLib.register(email, password);
+        const user  = await authLib.register(email, password);
         req.session.userId    = user.id;
         req.session.userEmail = user.email;
-        res.json({ ok: true });
+
+        // Envoyer email de vérification (non bloquant si SMTP absent)
+        try {
+            const token    = await authLib.generateEmailToken(user.id);
+            const uiDomain = process.env.GAMADCODE_UI_DOMAIN || `localhost:${PORT}`;
+            const link     = `https://${uiDomain}/verify-email?token=${token}`;
+            const mailer   = require('./lib/mailer');
+            await mailer.send({
+                to:      user.email,
+                subject: 'GamadCode — Vérifiez votre adresse email',
+                html: `<div style="font-family:sans-serif;max-width:520px;margin:auto">
+<h2 style="color:#6366f1">Bienvenue sur GamadCode 👋</h2>
+<p>Cliquez sur le bouton ci-dessous pour confirmer votre adresse email.</p>
+<a href="${link}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;border-radius:10px;text-decoration:none;font-weight:700">Vérifier mon email →</a>
+<p style="color:#64748b;font-size:13px">Ce lien expire dans 24 heures.</p>
+<hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+<p style="color:#64748b;font-size:12px">Lien : ${link}</p>
+</div>`,
+                text: `Vérifiez votre email GamadCode : ${link}`,
+            });
+            res.json({ ok: true, emailSent: true });
+        } catch {
+            res.json({ ok: true, emailSent: false });
+        }
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
+});
+
+// ── Vérification email ────────────────────────────────────────────────────────
+app.get('/api/auth/verify-email', async (req, res) => {
+    loadLibs();
+    if (!authLib) return res.status(503).json({ error: 'Service non disponible' });
+    try {
+        await authLib.verifyEmailToken(req.query.token);
+        res.redirect('/my?verified=1');
+    } catch (e) {
+        res.redirect('/login?error=' + encodeURIComponent(e.message));
+    }
+});
+
+app.post('/api/auth/resend-verification', requireUser, async (req, res) => {
+    loadLibs();
+    if (!authLib || !db) return res.status(503).json({ error: 'Service non disponible' });
+    const userId = req.session.userId;
+    if (!userId) return res.status(403).json({ error: 'Non connecté' });
+    try {
+        const u = await db.query('SELECT email, email_verified FROM users WHERE id = $1', [userId]);
+        if (!u.rows.length) return res.status(404).json({ error: 'Utilisateur introuvable' });
+        if (u.rows[0].email_verified) return res.status(400).json({ error: 'Email déjà vérifié' });
+
+        const token    = await authLib.generateEmailToken(userId);
+        const uiDomain = process.env.GAMADCODE_UI_DOMAIN || `localhost:${PORT}`;
+        const link     = `https://${uiDomain}/verify-email?token=${token}`;
+        const mailer   = require('./lib/mailer');
+        await mailer.send({
+            to:      u.rows[0].email,
+            subject: 'GamadCode — Vérifiez votre adresse email',
+            html: `<div style="font-family:sans-serif;max-width:520px;margin:auto">
+<h2 style="color:#6366f1">Confirmez votre email</h2>
+<p>Cliquez sur ce lien pour vérifier votre adresse :</p>
+<a href="${link}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;border-radius:10px;text-decoration:none;font-weight:700">Vérifier mon email →</a>
+<p style="color:#64748b;font-size:12px">Lien : ${link}</p>
+</div>`,
+            text: `Vérifiez votre email GamadCode : ${link}`,
+        });
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Mot de passe oublié ───────────────────────────────────────────────────────
+app.post('/api/auth/forgot-password', async (req, res) => {
+    loadLibs();
+    if (!authLib) return res.status(503).json({ error: 'Service non disponible' });
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requis' });
+    try {
+        const result = await authLib.generateResetToken(email);
+        if (result) {
+            const uiDomain = process.env.GAMADCODE_UI_DOMAIN || `localhost:${PORT}`;
+            const link     = `https://${uiDomain}/reset-password?token=${result.token}`;
+            const mailer   = require('./lib/mailer');
+            await mailer.send({
+                to:      email.toLowerCase().trim(),
+                subject: 'GamadCode — Réinitialisation de mot de passe',
+                html: `<div style="font-family:sans-serif;max-width:520px;margin:auto">
+<h2 style="color:#6366f1">Réinitialisation de mot de passe</h2>
+<p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous.</p>
+<a href="${link}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;border-radius:10px;text-decoration:none;font-weight:700">Réinitialiser mon mot de passe →</a>
+<p style="color:#64748b;font-size:13px">Ce lien expire dans 60 minutes. Si vous n'avez pas fait cette demande, ignorez cet email.</p>
+<hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+<p style="color:#64748b;font-size:12px">Lien : ${link}</p>
+</div>`,
+                text: `Réinitialisez votre mot de passe GamadCode : ${link}`,
+            });
+        }
+        // Toujours répondre OK (ne pas révéler si l'email existe)
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+    loadLibs();
+    if (!authLib) return res.status(503).json({ error: 'Service non disponible' });
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token et mot de passe requis' });
+    try {
+        await authLib.resetPassword(token, password);
+        res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // ── Connexion ─────────────────────────────────────────────────────────────────
@@ -448,7 +554,7 @@ app.post('/api/auth/login', async (req, res) => {
         req.session.userId    = user.id;
         req.session.userEmail = user.email;
         req.session.isAdmin   = user.is_admin || false;
-        res.json({ ok: true });
+        res.json({ ok: true, emailVerified: user.email_verified !== false });
     } catch (e) {
         res.status(401).json({ error: e.message });
     }
@@ -1272,7 +1378,9 @@ wss.on('connection', (ws) => {
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
 app.get('/',          (req, res) => res.sendFile(path.join(__dirname, 'public/landing.html')));
-app.get('/login',     (req, res) => res.sendFile(path.join(__dirname, 'public/login.html')));
+app.get('/login',          (req, res) => res.sendFile(path.join(__dirname, 'public/login.html')));
+app.get('/verify-email',   (req, res) => res.redirect(`/api/auth/verify-email?token=${req.query.token || ''}`));
+app.get('/reset-password', (req, res) => res.sendFile(path.join(__dirname, 'public/reset-password.html')));
 app.get('/my',        requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/user-dashboard.html')));
 app.get('/dashboard', requireUser, (req, res) => res.sendFile(path.join(__dirname, 'public/dashboard.html')));
 app.get('/admin',     requireUser, requireAdmin, (req, res) => res.sendFile(path.join(__dirname, 'public/admin.html')));
