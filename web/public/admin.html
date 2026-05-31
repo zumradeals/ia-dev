@@ -115,6 +115,23 @@ tbody tr:last-child { border-bottom:none; }
 #toast.ok  { border-color:rgba(34,197,94,.4); }
 #toast.err { border-color:rgba(248,113,113,.4); }
 
+/* SETTINGS TABS */
+.tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:0; }
+.tab { padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .15s; }
+.tab:hover { color:var(--text); }
+.tab.active { color:var(--p); border-bottom-color:var(--p); }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+.field-row { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+.field-row label { font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+.field-input { background:rgba(255,255,255,.04); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:9px; font-size:14px; outline:none; width:100%; max-width:460px; }
+.field-input:focus { border-color:var(--p); }
+.field-input[type=password] { font-family:monospace; }
+.field-hint { font-size:12px; color:var(--muted); }
+.secret-row { display:flex; align-items:center; gap:10px; }
+.secret-badge { font-size:12px; padding:3px 10px; border-radius:999px; background:rgba(34,197,94,.1); color:var(--green); border:1px solid rgba(34,197,94,.3); }
+.secret-badge.empty { background:rgba(248,113,113,.1); color:var(--red); border-color:rgba(248,113,113,.3); }
+
 /* CATALOGUE EXTENSIONS */
 .cat-section { margin-bottom:18px; }
 .cat-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:10px; }
@@ -152,6 +169,7 @@ tbody tr:last-child { border-bottom:none; }
     <div class="nav-item" onclick="goto('extensions')"><span class="icon">🧩</span> Extensions</div>
     <div class="nav-section">Système</div>
     <div class="nav-item" onclick="goto('system')"><span class="icon">⚙️</span> Système</div>
+    <div class="nav-item" onclick="goto('settings')"><span class="icon">🔧</span> Paramètres</div>
     <div class="nav-item" onclick="goto('claude')"><span class="icon">🤖</span> Claude Code</div>
     <div class="nav-item" onclick="goto('billing')"><span class="icon">💳</span> Facturation</div>
   </nav>
@@ -248,6 +266,142 @@ tbody tr:last-child { border-bottom:none; }
       </div>
     </div>
 
+    <!-- PARAMÈTRES -->
+    <div class="section" id="section-settings">
+      <div class="section-header">
+        <div><div class="section-title">Paramètres</div><div class="section-sub">Configuration de la plateforme — local.env &amp; secrets.env</div></div>
+      </div>
+
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('general')">Général</div>
+          <div class="tab" onclick="switchTab('smtp')">SMTP</div>
+          <div class="tab" onclick="switchTab('github')">GitHub OAuth</div>
+          <div class="tab" onclick="switchTab('anthropic')">Anthropic</div>
+        </div>
+
+        <!-- Général -->
+        <div class="tab-panel active" id="tab-general">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">
+            <div class="field-row">
+              <label>Nom du projet</label>
+              <input class="field-input" id="s-projectName" placeholder="GamadCode">
+            </div>
+            <div class="field-row">
+              <label>Branche Git par défaut</label>
+              <input class="field-input" id="s-gitBranch" placeholder="main">
+            </div>
+            <div class="field-row">
+              <label>Domaine code (OpenVSCode)</label>
+              <input class="field-input" id="s-codeDomain" placeholder="code.gamad.net">
+            </div>
+            <div class="field-row">
+              <label>Domaine UI (app)</label>
+              <input class="field-input" id="s-uiDomain" placeholder="app.gamad.net">
+            </div>
+            <div class="field-row">
+              <label>Port UI</label>
+              <input class="field-input" id="s-uiPort" type="number" placeholder="3000" style="max-width:140px">
+            </div>
+            <div class="field-row">
+              <label>Port code-server interne</label>
+              <input class="field-input" id="s-codeServerPort" type="number" placeholder="8080" style="max-width:140px">
+            </div>
+            <div class="field-row" style="grid-column:1/-1">
+              <label>Image Docker workspace</label>
+              <input class="field-input" id="s-workspaceImage" placeholder="zumradeals/gamadcode-workspace:latest" style="max-width:100%">
+              <span class="field-hint">Utilisée à la création de chaque nouveau workspace.</span>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="saveSettings('general')" style="margin-top:8px">💾 Sauvegarder</button>
+        </div>
+
+        <!-- SMTP -->
+        <div class="tab-panel" id="tab-smtp">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">
+            <div class="field-row">
+              <label>Hôte SMTP</label>
+              <input class="field-input" id="s-smtpHost" placeholder="smtp.gmail.com">
+            </div>
+            <div class="field-row">
+              <label>Port</label>
+              <input class="field-input" id="s-smtpPort" type="number" placeholder="587" style="max-width:120px">
+            </div>
+            <div class="field-row">
+              <label>Adresse FROM</label>
+              <input class="field-input" id="s-smtpFrom" placeholder="GamadCode &lt;noreply@gamad.net&gt;">
+            </div>
+            <div class="field-row">
+              <label>Utilisateur SMTP</label>
+              <input class="field-input" id="s-smtpUser" placeholder="user@gmail.com">
+            </div>
+            <div class="field-row" style="grid-column:1/-1">
+              <label>Mot de passe SMTP</label>
+              <div class="secret-row">
+                <input class="field-input" id="s-smtpPass" type="password" placeholder="Laisser vide pour ne pas modifier" style="max-width:320px">
+                <span class="secret-badge empty" id="smtp-pass-badge">Non configuré</span>
+              </div>
+              <span class="field-hint">Gmail : utilisez un mot de passe d'application (pas votre mot de passe principal).</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn-primary" onclick="saveSettings('smtp')">💾 Sauvegarder</button>
+            <button class="btn-sm" onclick="testSmtp()" id="btn-test-smtp">📧 Tester SMTP</button>
+          </div>
+        </div>
+
+        <!-- GitHub OAuth -->
+        <div class="tab-panel" id="tab-github">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:18px">
+            Créez une OAuth App sur <a href="https://github.com/settings/developers" target="_blank" style="color:var(--p)">github.com/settings/developers</a>.<br>
+            Callback URL : <code style="background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px" id="github-cb-hint">—</code>
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px">
+            <div class="field-row">
+              <label>Client ID</label>
+              <div class="secret-row">
+                <input class="field-input" id="s-ghClientId" placeholder="Ov23li…" style="font-family:monospace">
+                <span class="secret-badge empty" id="gh-id-badge">Non configuré</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <label>Client Secret</label>
+              <div class="secret-row">
+                <input class="field-input" id="s-ghSecret" type="password" placeholder="Laisser vide pour ne pas modifier" style="max-width:280px">
+                <span class="secret-badge empty" id="gh-secret-badge">Non configuré</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <label>Login admin GitHub</label>
+              <input class="field-input" id="s-ghAdmin" placeholder="votre-login-github">
+              <span class="field-hint">Seul ce compte peut se connecter comme admin via OAuth.</span>
+            </div>
+            <div class="field-row">
+              <label>Callback URL</label>
+              <input class="field-input" id="s-ghCb" placeholder="https://app.gamad.net/auth/github/callback">
+            </div>
+          </div>
+          <button class="btn-primary" onclick="saveSettings('github')" style="margin-top:8px">💾 Sauvegarder</button>
+        </div>
+
+        <!-- Anthropic -->
+        <div class="tab-panel" id="tab-anthropic">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:18px">
+            Clé API Anthropic utilisée comme fallback pour tous les workspaces sans clé personnelle.
+          </p>
+          <div class="field-row">
+            <label>ANTHROPIC_API_KEY</label>
+            <div class="secret-row">
+              <input class="field-input" id="s-anthropicKey" type="password" placeholder="sk-ant-… (laisser vide pour ne pas modifier)" style="max-width:380px">
+              <span class="secret-badge empty" id="anthropic-badge">Non configuré</span>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="saveSettings('anthropic')" style="margin-top:8px">💾 Sauvegarder</button>
+        </div>
+
+      </div><!-- .card -->
+    </div>
+
     <!-- CLAUDE CODE -->
     <div class="section" id="section-claude">
       <div class="section-header">
@@ -337,6 +491,7 @@ function goto(id) {
   document.getElementById(`section-${id}`).classList.add('active');
   if (id === 'system')     loadSystem();
   if (id === 'extensions') loadExtensions();
+  if (id === 'settings')   loadSettings();
   if (id === 'claude')     loadClaudeSettings();
   if (id === 'workspaces') renderWorkspaces(allUsers);
 }
@@ -561,6 +716,105 @@ async function saveExtensions() {
   if (r.error) { toast(r.error, false); return; }
   renderCatalogue(content);
   toast('Extensions sauvegardées');
+}
+
+// ── Paramètres ────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const names = ['general','smtp','github','anthropic'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+async function loadSettings() {
+  const r = await API.get('/api/admin/settings');
+  if (r.error) { toast(r.error, false); return; }
+
+  // Général
+  document.getElementById('s-projectName').value    = r.general.projectName    || '';
+  document.getElementById('s-codeDomain').value     = r.general.codeDomain     || '';
+  document.getElementById('s-uiDomain').value       = r.general.uiDomain       || '';
+  document.getElementById('s-uiPort').value         = r.general.uiPort         || '3000';
+  document.getElementById('s-codeServerPort').value = r.general.codeServerPort || '8080';
+  document.getElementById('s-workspaceImage').value = r.general.workspaceImage || '';
+  document.getElementById('s-gitBranch').value      = r.general.gitBranch      || 'main';
+
+  // SMTP
+  document.getElementById('s-smtpHost').value = r.smtp.host || '';
+  document.getElementById('s-smtpPort').value = r.smtp.port || '587';
+  document.getElementById('s-smtpFrom').value = r.smtp.from || '';
+  document.getElementById('s-smtpUser').value = r.smtp.user || '';
+  setBadge('smtp-pass-badge', r.smtp.hasPass);
+
+  // GitHub
+  document.getElementById('s-ghClientId').value = r.github.clientId    || '';
+  document.getElementById('s-ghAdmin').value    = r.github.adminLogin   || '';
+  document.getElementById('s-ghCb').value       = r.github.callbackUrl  || '';
+  setBadge('gh-id-badge',      !!r.github.clientId);
+  setBadge('gh-secret-badge',  r.github.hasSecret);
+  const cbHint = document.getElementById('github-cb-hint');
+  if (cbHint) cbHint.textContent = r.github.callbackUrl || '—';
+
+  // Anthropic
+  setBadge('anthropic-badge', r.anthropic.hasKey);
+}
+
+function setBadge(id, ok) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent  = ok ? 'Configuré' : 'Non configuré';
+  el.className    = 'secret-badge' + (ok ? '' : ' empty');
+}
+
+async function saveSettings(section) {
+  let data = {};
+  if (section === 'general') {
+    data = {
+      projectName:    document.getElementById('s-projectName').value.trim(),
+      codeDomain:     document.getElementById('s-codeDomain').value.trim(),
+      uiDomain:       document.getElementById('s-uiDomain').value.trim(),
+      uiPort:         document.getElementById('s-uiPort').value.trim(),
+      codeServerPort: document.getElementById('s-codeServerPort').value.trim(),
+      workspaceImage: document.getElementById('s-workspaceImage').value.trim(),
+      gitBranch:      document.getElementById('s-gitBranch').value.trim(),
+    };
+  } else if (section === 'smtp') {
+    data = {
+      host: document.getElementById('s-smtpHost').value.trim(),
+      port: document.getElementById('s-smtpPort').value.trim(),
+      from: document.getElementById('s-smtpFrom').value.trim(),
+      user: document.getElementById('s-smtpUser').value.trim(),
+      pass: document.getElementById('s-smtpPass').value,
+    };
+  } else if (section === 'github') {
+    data = {
+      clientId:    document.getElementById('s-ghClientId').value.trim(),
+      secret:      document.getElementById('s-ghSecret').value,
+      adminLogin:  document.getElementById('s-ghAdmin').value.trim(),
+      callbackUrl: document.getElementById('s-ghCb').value.trim(),
+    };
+  } else if (section === 'anthropic') {
+    data = { apiKey: document.getElementById('s-anthropicKey').value };
+  }
+
+  const r = await API.put('/api/admin/settings', { section, data });
+  if (r.error) { toast(r.error, false); return; }
+  toast('Paramètres sauvegardés');
+  // Effacer les champs secrets après sauvegarde
+  if (section === 'smtp')      { document.getElementById('s-smtpPass').value  = ''; setBadge('smtp-pass-badge', true); }
+  if (section === 'github')    { document.getElementById('s-ghSecret').value  = ''; setBadge('gh-secret-badge', true); setBadge('gh-id-badge', !!document.getElementById('s-ghClientId').value); }
+  if (section === 'anthropic') { document.getElementById('s-anthropicKey').value = ''; setBadge('anthropic-badge', true); }
+}
+
+async function testSmtp() {
+  const btn = document.getElementById('btn-test-smtp');
+  btn.disabled = true; btn.textContent = '…';
+  const r = await API.post('/api/admin/settings/test-smtp', {});
+  btn.disabled = false; btn.textContent = '📧 Tester SMTP';
+  if (r.error) { toast('SMTP erreur : ' + r.error, false); return; }
+  toast('Email de test envoyé à ' + r.to);
 }
 
 // ── Claude Code ───────────────────────────────────────────────────────────────

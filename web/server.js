@@ -1085,6 +1085,137 @@ app.put('/api/admin/extensions', requireUser, requireAdmin, (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin : settings général (local.env + secrets.env) ───────────────────────
+const SECRETS_ENV_PATH = path.join(DEVLAB_ROOT, 'config/secrets.env');
+
+// Lit un fichier .env et retourne { KEY: value } (sans les guillemets)
+const readEnvFile = (filePath) => {
+    const out = {};
+    if (!fs.existsSync(filePath)) return out;
+    for (const line of fs.readFileSync(filePath, 'utf8').split('\n')) {
+        const m = line.match(/^([A-Z0-9_]+)="?([^"]*)"?\s*$/);
+        if (m) out[m[1]] = m[2];
+    }
+    return out;
+};
+
+// Patch ciblé d'une clé dans un fichier .env (crée si absent, ajoute si clé manquante)
+const patchEnvFile = (filePath, patches) => {
+    let content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+    for (const [key, val] of Object.entries(patches)) {
+        if (val === null || val === undefined) continue; // ne pas toucher
+        const line = val === '' ? `${key}=""` : `${key}="${val}"`;
+        if (new RegExp(`^${key}=`, 'm').test(content)) {
+            content = content.replace(new RegExp(`^${key}=.*`, 'm'), line);
+        } else {
+            content = content.trimEnd() + `\n${line}\n`;
+        }
+    }
+    fs.writeFileSync(filePath, content, { mode: filePath.includes('secrets') ? 0o600 : 0o644 });
+};
+
+// Applique les patches à process.env (pour prise en compte immédiate sans redémarrage)
+const applyEnvPatches = (patches) => {
+    for (const [key, val] of Object.entries(patches)) {
+        if (val === null || val === undefined) continue;
+        if (val === '') delete process.env[key];
+        else process.env[key] = val;
+    }
+};
+
+app.get('/api/admin/settings', requireUser, requireAdmin, (req, res) => {
+    const loc = readEnvFile(LOCAL_ENV_PATH);
+    const sec = readEnvFile(SECRETS_ENV_PATH);
+    res.json({
+        general: {
+            projectName:   loc.GAMADCODE_PROJECT_NAME  || '',
+            codeDomain:    loc.GAMADCODE_DOMAIN         || '',
+            uiDomain:      loc.GAMADCODE_UI_DOMAIN      || '',
+            uiPort:        loc.GAMADCODE_UI_PORT        || '3000',
+            codeServerPort:loc.CODE_SERVER_PORT         || '8080',
+            workspaceImage:loc.WORKSPACE_IMAGE          || '',
+            gitBranch:     loc.GIT_DEFAULT_BRANCH       || 'main',
+        },
+        smtp: {
+            host:    loc.SMTP_HOST  || '',
+            port:    loc.SMTP_PORT  || '587',
+            from:    loc.SMTP_FROM  || '',
+            user:    loc.SMTP_USER  || sec.SMTP_USER || '',
+            hasPass: !!(sec.SMTP_PASS),
+        },
+        github: {
+            adminLogin:  loc.ADMIN_GITHUB_LOGIN || '',
+            callbackUrl: loc.GITHUB_CALLBACK_URL || '',
+            clientId:    sec.GITHUB_CLIENT_ID || '',
+            hasSecret:   !!(sec.GITHUB_CLIENT_SECRET),
+        },
+        anthropic: {
+            hasKey: !!(sec.ANTHROPIC_API_KEY),
+        },
+    });
+});
+
+app.put('/api/admin/settings', requireUser, requireAdmin, (req, res) => {
+    const { section, data } = req.body;
+    if (!section || typeof data !== 'object') return res.status(400).json({ error: 'Payload invalide' });
+
+    const localPatches  = {};
+    const secretPatches = {};
+
+    if (section === 'general') {
+        if (data.projectName    !== undefined) localPatches.GAMADCODE_PROJECT_NAME   = data.projectName;
+        if (data.codeDomain     !== undefined) localPatches.GAMADCODE_DOMAIN         = data.codeDomain;
+        if (data.uiDomain       !== undefined) localPatches.GAMADCODE_UI_DOMAIN      = data.uiDomain;
+        if (data.uiPort         !== undefined) localPatches.GAMADCODE_UI_PORT        = data.uiPort;
+        if (data.codeServerPort !== undefined) localPatches.CODE_SERVER_PORT         = data.codeServerPort;
+        if (data.workspaceImage !== undefined) localPatches.WORKSPACE_IMAGE          = data.workspaceImage;
+        if (data.gitBranch      !== undefined) localPatches.GIT_DEFAULT_BRANCH       = data.gitBranch;
+    } else if (section === 'smtp') {
+        if (data.host !== undefined) localPatches.SMTP_HOST = data.host;
+        if (data.port !== undefined) localPatches.SMTP_PORT = data.port;
+        if (data.from !== undefined) localPatches.SMTP_FROM = data.from;
+        if (data.user !== undefined) localPatches.SMTP_USER = data.user;
+        if (data.pass !== undefined && data.pass !== '') secretPatches.SMTP_PASS = data.pass;
+    } else if (section === 'github') {
+        if (data.adminLogin  !== undefined) localPatches.ADMIN_GITHUB_LOGIN  = data.adminLogin;
+        if (data.callbackUrl !== undefined) localPatches.GITHUB_CALLBACK_URL = data.callbackUrl;
+        if (data.clientId    !== undefined) secretPatches.GITHUB_CLIENT_ID   = data.clientId;
+        if (data.secret      !== undefined && data.secret !== '') secretPatches.GITHUB_CLIENT_SECRET = data.secret;
+    } else if (section === 'anthropic') {
+        if (data.apiKey !== undefined && data.apiKey !== '') secretPatches.ANTHROPIC_API_KEY = data.apiKey;
+    } else {
+        return res.status(400).json({ error: 'Section inconnue' });
+    }
+
+    try {
+        if (Object.keys(localPatches).length)  patchEnvFile(LOCAL_ENV_PATH,   localPatches);
+        if (Object.keys(secretPatches).length) patchEnvFile(SECRETS_ENV_PATH, secretPatches);
+        applyEnvPatches({ ...localPatches, ...secretPatches });
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/settings/test-smtp', requireUser, requireAdmin, async (req, res) => {
+    try {
+        const mailer = require('./lib/mailer');
+        const me = await (async () => {
+            if (req.isAuthenticated()) return req.user?.email || req.user?.login;
+            if (req.session.userId && db) {
+                const r = await db.query('SELECT email FROM users WHERE id=$1', [req.session.userId]);
+                return r.rows[0]?.email;
+            }
+        })();
+        if (!me) return res.status(400).json({ error: 'Email destinataire introuvable' });
+        await mailer.send({
+            to: me,
+            subject: 'GamadCode — Test SMTP',
+            html: '<p>✅ Votre configuration SMTP fonctionne correctement.</p>',
+            text: 'Configuration SMTP OK.',
+        });
+        res.json({ ok: true, to: me });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── WebSocket — routing centralisé ───────────────────────────────────────────
 // noServer: true évite que wss détruise les sockets code.gamad.net
 const wss = new WebSocketServer({ noServer: true });
