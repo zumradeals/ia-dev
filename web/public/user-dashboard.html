@@ -1104,11 +1104,20 @@ function openRepoBtn(btn) {
 async function openRepo(cloneUrl, repoName, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
+  // Ouvrir le tab immédiatement dans le gesture utilisateur
+  // (window.open après await est bloqué par les popup blockers)
+  const win = window.open('', '_blank');
   try {
     const data = await API.post('/api/workspace/open-repo', { cloneUrl, repoName });
-    if (data.error) { toast(data.error, false); return; }
-    // Lancer l'analyse IA avant d'ouvrir le workspace
-    await startOnboarding(repoName, data.url);
+    if (data.error) {
+      if (win) win.close();
+      toast(data.error, false);
+      return;
+    }
+    await startOnboarding(repoName, data.url, win);
+  } catch {
+    if (win) win.close();
+    toast('Erreur lors du chargement du dépôt', false);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '↗ Ouvrir';
@@ -1119,13 +1128,14 @@ async function openRepo(cloneUrl, repoName, btn) {
 let _obRepoName = null;
 let _obWorkspaceUrl = null;
 let _obAnalysis = null;
+let _obWindow = null;  // tab pré-ouvert dans le gesture utilisateur
 
-async function startOnboarding(repoName, workspaceUrl) {
+async function startOnboarding(repoName, workspaceUrl, preOpenedWin) {
   _obRepoName     = repoName;
   _obWorkspaceUrl = workspaceUrl;
   _obAnalysis     = null;
+  _obWindow       = preOpenedWin || null;
 
-  // Afficher le modal en mode "analyse en cours"
   document.getElementById('ob-analyzing').style.display = 'block';
   document.getElementById('ob-result').style.display    = 'none';
   document.getElementById('ob-logs-section').style.display = 'none';
@@ -1134,12 +1144,26 @@ async function startOnboarding(repoName, workspaceUrl) {
 
   try {
     const r = await API.post('/api/workspace/analyze-repo', { repoName });
-    if (r.error) { closeOnboarding(); window.open(workspaceUrl, '_blank'); return; }
+    if (r.error) {
+      closeOnboarding();
+      _openWorkspace();
+      return;
+    }
     _obAnalysis = r;
     showOnboardingResult(r);
   } catch {
     closeOnboarding();
-    window.open(workspaceUrl, '_blank');
+    _openWorkspace();
+  }
+}
+
+// Navigue le tab pré-ouvert (ou ouvre un nouveau si fermé)
+function _openWorkspace() {
+  if (_obWindow && !_obWindow.closed) {
+    _obWindow.location.href = _obWorkspaceUrl;
+  } else {
+    // Fallback : navigation dans le même onglet si le tab pré-ouvert a été fermé
+    location.href = _obWorkspaceUrl;
   }
 }
 
@@ -1203,7 +1227,7 @@ async function applyOnboarding() {
     btn.innerHTML = '✓ Appliqué — ouverture…';
     setTimeout(() => {
       closeOnboarding();
-      window.open(_obWorkspaceUrl, '_blank');
+      _openWorkspace();
     }, 1200);
   } catch {
     btn.disabled = false; btn.innerHTML = '⚡ Appliquer & Ouvrir';
@@ -1213,7 +1237,7 @@ async function applyOnboarding() {
 
 function skipOnboarding() {
   closeOnboarding();
-  window.open(_obWorkspaceUrl, '_blank');
+  _openWorkspace();
 }
 
 function closeOnboarding() {

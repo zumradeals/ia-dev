@@ -488,6 +488,40 @@ JSEOF
     echo "[gamad] Setup terminé."
 fi
 
+# ── Isolation historique VS Code (une seule fois par container) ─────────────
+# Efface les "fichiers récents" baked dans l'image Docker pour éviter
+# qu'un nouvel utilisateur voie les travaux d'un autre utilisateur.
+HISTORY_MARKER="$HOME/.gamad-history-cleared"
+if [ ! -f "$HISTORY_MARKER" ] && command -v node >/dev/null 2>&1; then
+    node - <<'JSEOF' 2>/dev/null
+const fs   = require('fs');
+const home = process.env.HOME || '/home/workspace';
+
+// Chercher le fichier globalStorage dans tous les emplacements connus
+const candidates = [
+    home + '/.openvscode-server/data/User/globalStorage/storage.json',
+    '/root/.openvscode-server/data/User/globalStorage/storage.json',
+    home + '/.local/share/code-server/User/globalStorage/storage.json',
+];
+
+for (const f of candidates) {
+    if (!fs.existsSync(f)) continue;
+    try {
+        const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+        let changed = false;
+        for (const k of Object.keys(s)) {
+            if (/recent|history|opened/i.test(k)) { delete s[k]; changed = true; }
+        }
+        if (changed) {
+            fs.writeFileSync(f, JSON.stringify(s, null, 2));
+            process.stdout.write('[gamad] ✓ Historique VS Code effacé : ' + f + '\n');
+        }
+    } catch {}
+}
+JSEOF
+    touch "$HISTORY_MARKER"
+fi
+
 # ── Template de workspace (exécuté une seule fois) ──────────────────────────
 TEMPLATE_MARKER="$HOME/.gamad-template-applied"
 WORKSPACE_DIR="/home/workspace"
