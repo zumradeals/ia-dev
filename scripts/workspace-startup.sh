@@ -5,7 +5,11 @@
 EXTENSIONS_CONF="/opt/gamadcode/extensions.conf"
 EXT_HASH=$(md5sum "$EXTENSIONS_CONF" 2>/dev/null | cut -d' ' -f1 || echo "none")
 SERVER_VER=$("$OPENVSCODE_SERVER_ROOT/bin/openvscode-server" --version 2>/dev/null | head -1 | tr ' ' '-')
-MARKER="$HOME/.gamad-setup-${EXT_HASH:0:8}-${SERVER_VER}"
+CLAUDE_VER=$(find "$HOME/.openvscode-server/extensions" \
+    -name "package.json" -path "*/anthropic.claude*" \
+    -exec node -e "try{process.stdout.write(require(process.argv[1]).version)}catch{}" {} \; \
+    2>/dev/null | head -1 || echo "0")
+MARKER="$HOME/.gamad-setup-${EXT_HASH:0:8}-${SERVER_VER}-c${CLAUDE_VER//./}"
 
 if [ ! -f "$MARKER" ]; then
     # Corriger les permissions du volume (peut être root si clonage fait en root)
@@ -49,13 +53,86 @@ if [ ! -f "$MARKER" ]; then
             && echo "[gamad] ✓ claude dans /usr/local/bin"
     fi
 
-    # ── Patch Claude Code : Activity Bar au lieu de Secondary Sidebar ──────
-    CLAUDE_EXT=$(find "$HOME/.openvscode-server/extensions" -name "extension.js" -path "*/anthropic.claude-code*" 2>/dev/null | head -1)
-    if [ -n "$CLAUDE_EXT" ]; then
-        sed -i 's/claudeVSCodeSidebarSecondary\.focus/claudeVSCodeSidebar.focus/g' "$CLAUDE_EXT" 2>/dev/null
-        sed -i 's/getPreferredLocation()==="sidebar"&&G)/getPreferredLocation()==="sidebar")/g' "$CLAUDE_EXT" 2>/dev/null
-        echo "[gamad] ✓ patch Claude Code sidebar"
+    # ── Auth Claude Code : injecter la clé API dans la config extension ───
+    if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+        mkdir -p "$HOME/.claude"
+
+        # Écrire settings.json pour l'extension VS Code
+        node - <<'JSEOF' 2>/dev/null \
+            && echo "[gamad] ✓ Claude Code auth configurée" \
+            || echo "[gamad] ✗ Erreur config Claude Code auth (non bloquant)"
+const fs   = require('fs');
+const dir  = process.env.HOME + '/.claude';
+const f    = dir + '/settings.json';
+const key  = process.env.ANTHROPIC_API_KEY;
+if (!key) process.exit(0);
+let s = {};
+try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
+// Structure attendue par l'extension Claude Code
+s.primaryApiKey = key;
+if (!s.hasCompletedOnboarding) s.hasCompletedOnboarding = true;
+if (!s.hasAcknowledgedCostThreshold) s.hasAcknowledgedCostThreshold = true;
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(f, JSON.stringify(s, null, 2), { mode: 0o600 });
+JSEOF
+
+        # Écrire aussi .credentials (format alternatif selon version extension)
+        node - <<'JSEOF' 2>/dev/null
+const fs  = require('fs');
+const dir = process.env.HOME + '/.claude';
+const f   = dir + '/.credentials';
+const key = process.env.ANTHROPIC_API_KEY;
+if (!key) process.exit(0);
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(f, JSON.stringify({ claudeAiOauthTokenData: null, primaryApiKey: key }, null, 2), { mode: 0o600 });
+JSEOF
+
+        # Configurer aussi via claude CLI (si disponible)
+        export PATH="$HOME/.npm-global/bin:/usr/local/bin:$PATH"
+        if command -v claude >/dev/null 2>&1; then
+            claude config set primaryApiKey "$ANTHROPIC_API_KEY" 2>/dev/null \
+                && echo "[gamad] ✓ Claude CLI configuré" \
+                || true
+        fi
+    else
+        echo "[gamad] ℹ ANTHROPIC_API_KEY absent — connexion manuelle requise"
     fi
+
+    # ── Claude Code : configuration via settings officiels ────────────────
+    # Remplace le patch sed fragile sur le JS minifié de l'extension.
+    # Approche : settings.json + keybindings.json injectés avant le lancement.
+    echo "[gamad] Configuration Claude Code (sidebar primaire)..."
+
+    node - <<'JSEOF' 2>/dev/null \
+        && echo "[gamad] ✓ Claude Code configuré" \
+        || echo "[gamad] ✗ Erreur config Claude Code (non bloquant)"
+const fs = require('fs');
+const dir = process.env.HOME + '/.openvscode-server/data/User';
+fs.mkdirSync(dir, { recursive: true });
+const f = dir + '/settings.json';
+let s = {};
+try { s = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
+Object.assign(s, {
+  'workbench.secondarySideBar.defaultVisibility': 'hidden',
+  'claude.preferredPanel': 'sidebar',
+  'workbench.startupEditor': 'none',
+  'workbench.sideBar.location': 'left',
+  'workbench.activityBar.visible': true
+});
+fs.writeFileSync(f, JSON.stringify(s, null, 2));
+JSEOF
+
+    node - <<'JSEOF' 2>/dev/null \
+        && echo "[gamad] ✓ Keybinding Ctrl+Shift+A → Claude Code"
+const fs = require('fs');
+const dir = process.env.HOME + '/.openvscode-server/data/User';
+const f = dir + '/keybindings.json';
+let kb = [];
+try { kb = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
+kb = kb.filter(k => !String(k.command || '').includes('claude'));
+kb.push({ "key": "ctrl+shift+a", "command": "claudeVSCodeSidebar.focus" });
+fs.writeFileSync(f, JSON.stringify(kb, null, 2));
+JSEOF
 
     # ── Settings VS Code ────────────────────────────────────────────────────
     SETTINGS_DIR="$HOME/.openvscode-server/data/User"
@@ -79,6 +156,8 @@ Object.assign(existing, {
     'extensions.autoUpdate': false,
     'editor.fontSize': 14, 'editor.tabSize': 2, 'editor.formatOnSave': true,
     'git.autofetch': true,
+    'remote.autoForwardPorts': true,
+    'remote.autoForwardPortsSource': 'process',
     'terminal.integrated.defaultProfile.linux': 'bash',
     'terminal.integrated.env.linux': env,
     'workbench.iconTheme': 'material-icon-theme',

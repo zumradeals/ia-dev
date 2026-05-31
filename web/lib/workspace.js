@@ -8,7 +8,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 const PORT_MIN           = 10000;
 const PORT_MAX           = 20000;
-const WORKSPACE_IMAGE    = process.env.WORKSPACE_IMAGE   || 'gitpod/openvscode-server:latest';
+const WORKSPACE_IMAGE    = process.env.WORKSPACE_IMAGE   || 'gamad/gamadcode-workspace:latest';
 const WORKSPACE_BASE     = process.env.WORKSPACE_BASE    || '/opt/gamadcode/users';
 
 const PROVIDER_ENV_MAP = {
@@ -33,9 +33,17 @@ const getUserEnvVars = async (userId) => {
         'SELECT provider, key_value FROM api_keys WHERE user_id = $1',
         [userId]
     );
-    return result.rows
+    const vars = result.rows
         .filter(r => r.key_value)
         .map(r => `${PROVIDER_ENV_MAP[r.provider] || r.provider.toUpperCase() + '_KEY'}=${r.key_value}`);
+
+    // Fallback : si pas de clé anthropic en DB, utiliser celle du serveur
+    const hasAnthropic = result.rows.some(r => r.provider === 'anthropic' && r.key_value);
+    if (!hasAnthropic && process.env.ANTHROPIC_API_KEY) {
+        vars.push(`ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`);
+    }
+
+    return vars;
 };
 
 const pullImage = (image) => new Promise((resolve, reject) => {

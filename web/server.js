@@ -58,6 +58,25 @@ const resolveContainerIP = async (wsPort) => {
     return null;
 };
 
+// Résoudre l'ID d'un container via son port externe (pour docker exec)
+const containerIDCache = new Map(); // ws_port → { id, expires }
+const resolveContainerID = async (wsPort) => {
+    const now = Date.now();
+    const cached = containerIDCache.get(wsPort);
+    if (cached && cached.expires > now) return cached.id;
+
+    const Docker = require('dockerode');
+    const d = new Docker({ socketPath: '/var/run/docker.sock' });
+    const containers = await d.listContainers({ filters: JSON.stringify({ status: ['running'] }) });
+    for (const c of containers) {
+        if ((c.Ports || []).some(p => p.PublicPort === wsPort)) {
+            containerIDCache.set(wsPort, { id: c.Id, expires: now + 120000 });
+            return c.Id;
+        }
+    }
+    return null;
+};
+
 // Proxy HTTP bas-niveau → pas de createProxyMiddleware (évite l'accrochage sur server.upgrade)
 const proxyHTTP = (req, res, ip, internalPort) => {
     const subPath = (req.url || '/').replace(/^\/proxy\/\d+/, '') || '/';
@@ -186,6 +205,36 @@ app.use((req, res, next) => {
                 proxyHTTP(req, res, ip, internalPort);
             })
             .catch(() => res.status(502).send('Erreur proxy interne'));
+        return;
+    }
+
+    // OAuth callback Claude Code : /callback?code=...&state=...
+    // L'extension démarre un serveur HTTP local sur un port aléatoire pour recevoir
+    // le token — on détecte ce port via ss dans le container et on proxy vers lui.
+    if (req.path === '/callback' && req.query.code && req.query.state) {
+        const wsPort = parseInt(parseCookie(req.headers.cookie, 'ws_port'));
+        if (!wsPort) return res.status(403).send('Session expirée');
+
+        Promise.all([
+            resolveContainerIP(wsPort),
+            resolveContainerID(wsPort)
+        ]).then(([ip, containerId]) => {
+            if (!ip || !containerId) return res.status(502).send('Container introuvable');
+
+            execFile('docker', ['exec', containerId, 'ss', '-tlnp'], (err, stdout) => {
+                if (err) return res.status(504).send(
+                    'Serveur OAuth non trouvé. Réessayez la connexion dans Claude Code.'
+                );
+                const ports = (stdout.match(/:\d+/g) || [])
+                    .map(p => parseInt(p.slice(1)))
+                    .filter(p => p > 1024 && p !== 8080);
+
+                if (!ports.length) return res.status(504).send(
+                    'Serveur OAuth non trouvé. Réessayez la connexion dans Claude Code.'
+                );
+                proxyHTTP(req, res, ip, ports[0]);
+            });
+        }).catch(() => res.status(502).send('Erreur proxy OAuth'));
         return;
     }
 
