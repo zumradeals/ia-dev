@@ -218,6 +218,54 @@ h1 .hl::after {
   color: var(--vl); padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
 }
 
+/* ── PRICING ──────────────────────────────────── */
+.pricing { padding: 120px 48px; position: relative; z-index: 1; }
+.pricing-inner { max-width: 1100px; margin: 0 auto; }
+.pricing-sub { color: var(--g1); font-size: 16px; margin-bottom: 64px; }
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+.plan {
+  background: var(--s1); border: 1px solid var(--bdr); border-radius: 18px;
+  padding: 36px 32px; display: flex; flex-direction: column; gap: 0; position: relative;
+  transition: border-color .2s, transform .2s;
+}
+.plan:hover { border-color: rgba(124,58,237,.3); transform: translateY(-4px); }
+.plan-featured {
+  border-color: rgba(124,58,237,.5);
+  background: linear-gradient(145deg, rgba(124,58,237,.08), var(--s1));
+  box-shadow: 0 0 0 1px rgba(124,58,237,.2), 0 24px 60px rgba(124,58,237,.12);
+}
+.plan-badge {
+  position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(135deg, var(--v), var(--v2));
+  color: #fff; font-size: 12px; font-weight: 700; padding: 5px 16px; border-radius: 999px;
+  white-space: nowrap;
+}
+.plan-header { margin-bottom: 28px; }
+.plan-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--g1); margin-bottom: 12px; }
+.plan-featured .plan-name { color: var(--vl); }
+.plan-price { display: flex; align-items: baseline; gap: 4px; margin-bottom: 12px; }
+.plan-amount { font-size: 48px; font-weight: 900; letter-spacing: -2px; color: var(--w); line-height: 1; }
+.plan-amount sup { font-size: 22px; vertical-align: super; letter-spacing: -1px; }
+.plan-period { font-size: 14px; color: var(--g2); margin-left: 4px; }
+.plan-desc { font-size: 13px; color: var(--g1); line-height: 1.6; }
+.plan-features { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; flex: 1; }
+.plan-features li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--g1); }
+.pf-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.pf-icon.ok { background: rgba(34,197,94,.12); color: var(--gr); }
+.pf-icon.no { background: rgba(255,255,255,.05); color: var(--g2); }
+.plan-btn {
+  display: block; text-align: center; padding: 14px; border-radius: 10px;
+  font-size: 15px; font-weight: 700; transition: all .2s; cursor: pointer;
+}
+.plan-btn-primary { background: var(--v); color: #fff; }
+.plan-btn-primary:hover { background: var(--v2); }
+.plan-btn-ghost { border: 1px solid var(--bdr); color: var(--g1); }
+.plan-btn-ghost:hover { border-color: var(--v); color: var(--vl); }
+.pricing-note {
+  text-align: center; font-size: 13px; color: var(--g2); margin-top: 40px;
+  padding-top: 32px; border-top: 1px solid var(--bdr);
+}
+
 /* ── CTA FINAL ────────────────────────────────── */
 .cta-final {
   padding: 140px 48px; text-align: center; position: relative; z-index: 1; overflow: hidden;
@@ -271,6 +319,8 @@ footer {
   .compare { padding: 80px 20px; }
   .cta-final { padding: 80px 20px; }
   .trust { padding: 16px 20px; }
+  .pricing { padding: 80px 20px; }
+  .plans { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
   footer { padding: 24px 20px; flex-direction: column; text-align: center; }
 }
 </style>
@@ -451,6 +501,77 @@ footer {
         </tr>
       </tbody>
     </table>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="pricing-inner">
+    <div class="section-tag">Tarifs</div>
+    <h2 class="section-title" style="margin-bottom:16px">Simple, transparent, sans surprise.</h2>
+    <p class="pricing-sub">Commencez gratuitement. Évoluez quand vous en avez besoin.</p>
+    <div class="plans">
+
+      <!-- FREE -->
+      <div class="plan">
+        <div class="plan-header">
+          <div class="plan-name">Gratuit</div>
+          <div class="plan-price"><span class="plan-amount">0€</span><span class="plan-period">/mois</span></div>
+          <div class="plan-desc">Pour explorer et démarrer vos premiers projets IA.</div>
+        </div>
+        <ul class="plan-features">
+          <li><span class="pf-icon ok">✓</span> 1 workspace cloud</li>
+          <li><span class="pf-icon ok">✓</span> VS Code dans le navigateur</li>
+          <li><span class="pf-icon ok">✓</span> Claude Code + Codex inclus</li>
+          <li><span class="pf-icon ok">✓</span> 5 dépôts GitHub</li>
+          <li><span class="pf-icon ok">✓</span> 0.5 CPU · 256 MB RAM</li>
+          <li><span class="pf-icon no">–</span> Démarrage prioritaire</li>
+          <li><span class="pf-icon no">–</span> Support dédié</li>
+        </ul>
+        <a href="/login" class="plan-btn plan-btn-ghost">Commencer gratuitement</a>
+      </div>
+
+      <!-- PRO -->
+      <div class="plan plan-featured">
+        <div class="plan-badge">Le plus populaire</div>
+        <div class="plan-header">
+          <div class="plan-name">Pro</div>
+          <div class="plan-price"><span class="plan-amount">19<sup>€99</sup></span><span class="plan-period">/mois</span></div>
+          <div class="plan-desc">Pour les développeurs qui codent sérieusement au quotidien.</div>
+        </div>
+        <ul class="plan-features">
+          <li><span class="pf-icon ok">✓</span> 1 workspace cloud</li>
+          <li><span class="pf-icon ok">✓</span> VS Code dans le navigateur</li>
+          <li><span class="pf-icon ok">✓</span> Claude Code + Codex inclus</li>
+          <li><span class="pf-icon ok">✓</span> 50 dépôts GitHub</li>
+          <li><span class="pf-icon ok">✓</span> <strong>2 CPU · 1 GB RAM</strong></li>
+          <li><span class="pf-icon ok">✓</span> <strong>Démarrage prioritaire</strong></li>
+          <li><span class="pf-icon no">–</span> Support dédié</li>
+        </ul>
+        <a href="/login" class="plan-btn plan-btn-primary">Passer à Pro →</a>
+      </div>
+
+      <!-- ENTERPRISE -->
+      <div class="plan">
+        <div class="plan-header">
+          <div class="plan-name">Entreprise</div>
+          <div class="plan-price"><span class="plan-amount">99<sup>€99</sup></span><span class="plan-period">/mois</span></div>
+          <div class="plan-desc">Pour les équipes et les usages intensifs ou professionnels.</div>
+        </div>
+        <ul class="plan-features">
+          <li><span class="pf-icon ok">✓</span> Workspaces illimités</li>
+          <li><span class="pf-icon ok">✓</span> VS Code dans le navigateur</li>
+          <li><span class="pf-icon ok">✓</span> Claude Code + Codex inclus</li>
+          <li><span class="pf-icon ok">✓</span> <strong>Dépôts GitHub illimités</strong></li>
+          <li><span class="pf-icon ok">✓</span> <strong>4 CPU · 4 GB RAM</strong></li>
+          <li><span class="pf-icon ok">✓</span> Démarrage prioritaire</li>
+          <li><span class="pf-icon ok">✓</span> <strong>Support dédié</strong></li>
+        </ul>
+        <a href="mailto:contact@gamad.net?subject=Entreprise" class="plan-btn plan-btn-ghost">Nous contacter</a>
+      </div>
+
+    </div>
+    <p class="pricing-note">Tous les plans incluent : isolation Docker complète · clés API sécurisées · accès depuis tout navigateur · stack dev préinstallée</p>
   </div>
 </section>
 
