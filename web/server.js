@@ -32,8 +32,8 @@ const GITHUB_CALLBACK_URL  = process.env.GITHUB_CALLBACK_URL  || `http://localho
 const ADMIN_GITHUB_LOGIN   = process.env.ADMIN_GITHUB_LOGIN   || '';
 
 // ── Workspace proxy helpers ───────────────────────────────────────────────────
-const wsTokenStore   = new Map(); // token → { port, created }
-const containerIPCache = new Map(); // ws_port (number) → { ip, expires }
+const wsTokenStore     = new Map(); // token → { port, userId, created }
+const containerIPCache = new Map(); // port (number) → { ip, expires }
 
 // Résoudre l'IP interne Docker d'un conteneur via son port externe
 const resolveContainerIP = async (wsPort) => {
@@ -106,12 +106,35 @@ const proxyWS = (req, socket, head, ip, internalPort) => {
     socket.on('error', () => { try { conn.destroy(); } catch {} });
 };
 
-const generateWsToken = (port) => {
-    const cutoff = Date.now() - 86400000;
+// wstoken : one-time URL token → lié à userId + port, TTL 4h
+const generateWsToken = (port, userId) => {
+    const cutoff = Date.now() - 4 * 3600000;
     for (const [k, v] of wsTokenStore) if (v.created < cutoff) wsTokenStore.delete(k);
     const token = crypto.randomBytes(32).toString('hex');
-    wsTokenStore.set(token, { port, created: Date.now() });
+    wsTokenStore.set(token, { port, userId, created: Date.now() });
     return token;
+};
+
+// Cookie signé : ws_sig = port:userId:hmac — impossible à forger sans SESSION_SECRET
+const signWsCookie = (port, userId) => {
+    const payload  = `${port}:${userId}`;
+    const hmac     = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex').slice(0, 24);
+    return `${payload}:${hmac}`;
+};
+
+const verifyWsCookie = (val) => {
+    if (!val) return null;
+    const parts = val.split(':');
+    if (parts.length !== 3) return null;
+    const [portStr, userStr, hmac] = parts;
+    if (!/^\d+$/.test(portStr) || !/^\d+$/.test(userStr)) return null;
+    const payload  = `${portStr}:${userStr}`;
+    const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex').slice(0, 24);
+    // Comparaison en temps constant pour éviter les timing attacks
+    try {
+        if (!crypto.timingSafeEqual(Buffer.from(hmac, 'utf8'), Buffer.from(expected, 'utf8'))) return null;
+    } catch { return null; }
+    return { port: parseInt(portStr, 10), userId: parseInt(userStr, 10) };
 };
 
 const parseCookie = (header, name) => {
@@ -122,8 +145,8 @@ const parseCookie = (header, name) => {
 const workspaceProxy = createProxyMiddleware({
     target: 'http://127.0.0.1',
     router: (req) => {
-        const port = parseCookie(req.headers.cookie, 'ws_port');
-        return `http://127.0.0.1:${port}`;
+        const verified = verifyWsCookie(parseCookie(req.headers.cookie, 'ws_sig'));
+        return `http://127.0.0.1:${verified ? verified.port : 0}`;
     },
     changeOrigin: false,
     ws: true,
@@ -173,33 +196,35 @@ app.use((req, res, next) => {
     const host = (req.headers.host || '').split(':')[0];
     if (host !== 'code.gamad.net') return next();
 
-    // Token reçu → valider → set cookie → redirect
+    // Token reçu → valider → set cookie signé → redirect
     if (req.query.wstoken) {
         const data = wsTokenStore.get(req.query.wstoken);
-        if (!data || Date.now() - data.created > 86400000) {
+        if (!data || Date.now() - data.created > 4 * 3600000) {
             return res.status(403).type('html').send(
                 'Lien expiré. <a href="https://app.gamad.net/my">Retour à app.gamad.net</a>.'
             );
         }
-        res.setHeader('Set-Cookie', `ws_port=${data.port}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=86400`);
-        // Préserver les autres params (ex: ?folder=...)
+        wsTokenStore.delete(req.query.wstoken); // usage unique
+        const sig = signWsCookie(data.port, data.userId);
+        res.setHeader('Set-Cookie', `ws_sig=${sig}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=14400`);
         const extra = Object.entries(req.query).filter(([k]) => k !== 'wstoken').map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
         return res.redirect(302, extra ? `/?${extra}` : '/');
     }
 
-    // Cookie présent → vérifier
-    const port = parseCookie(req.headers.cookie, 'ws_port');
-    if (!port || !/^\d+$/.test(port)) {
+    // Cookie signé présent → vérifier HMAC + extraire port
+    const verified = verifyWsCookie(parseCookie(req.headers.cookie, 'ws_sig'));
+    if (!verified) {
         return res.status(403).type('html').send(
             'Non autorisé. <a href="https://app.gamad.net/my">Ouvrez votre workspace depuis app.gamad.net</a>.'
         );
     }
+    const port = verified.port;
 
     // /proxy/:internalPort/* → proxy direct vers l'IP interne du conteneur
     const portMatch = req.path.match(/^\/proxy\/(\d+)/);
     if (portMatch) {
         const internalPort = parseInt(portMatch[1]);
-        resolveContainerIP(parseInt(port))
+        resolveContainerIP(port)
             .then(ip => {
                 if (!ip) return res.status(502).send('Conteneur introuvable');
                 proxyHTTP(req, res, ip, internalPort);
@@ -212,7 +237,7 @@ app.use((req, res, next) => {
     // L'extension démarre un serveur HTTP local sur un port aléatoire pour recevoir
     // le token — on détecte ce port via ss dans le container et on proxy vers lui.
     if (req.path === '/callback' && req.query.code && req.query.state) {
-        const wsPort = parseInt(parseCookie(req.headers.cookie, 'ws_port'));
+        const wsPort = verified.port;
         if (!wsPort) return res.status(403).send('Session expirée');
 
         Promise.all([
@@ -404,7 +429,7 @@ app.get('/api/workspace', requireUser, async (req, res) => {
         let url = null;
         if (ws.status === 'running' && ws.port) {
             const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
-            const token    = generateWsToken(ws.port);
+            const token    = generateWsToken(ws.port, userId);
             url = `https://${wsDomain}/?wstoken=${token}`;
         }
 
@@ -422,7 +447,7 @@ app.post('/api/workspace/start', requireUser, async (req, res) => {
     try {
         const ws       = await workspaceLib.createWorkspace(userId);
         const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
-        const token    = generateWsToken(ws.port);
+        const token    = generateWsToken(ws.port, userId);
         const url      = `https://${wsDomain}/?wstoken=${token}`;
         res.json({ ...ws, url });
     } catch (e) {
@@ -479,7 +504,7 @@ app.post('/api/workspace/launch', requireUser, async (req, res) => {
         fs.chmodSync(marker, 0o644);
 
         const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
-        const token    = generateWsToken(ws.port);
+        const token    = generateWsToken(ws.port, userId);
         res.json({ url: `https://${wsDomain}/?wstoken=${token}` });
     } catch (e) {
         console.error('[workspace] launch error:', e.message);
@@ -546,7 +571,7 @@ app.post('/api/workspace/open-repo', requireUser, async (req, res) => {
         const targetPath = await workspaceLib.cloneRepo(userId, authUrl, repoName);
 
         const wsDomain = process.env.CODE_SERVER_DOMAIN || 'code.gamad.net';
-        const token    = generateWsToken(ws.port);
+        const token    = generateWsToken(ws.port, userId);
         res.json({ url: `https://${wsDomain}/?wstoken=${token}&folder=${encodeURIComponent(targetPath)}` });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -843,14 +868,15 @@ server.on('upgrade', (req, socket, head) => {
 
     // Workspace OpenVSCode Server → proxy vers le conteneur Docker
     if (host === 'code.gamad.net') {
-        const wsPort = parseCookie(req.headers.cookie, 'ws_port');
-        if (!wsPort || !/^\d+$/.test(wsPort)) { socket.destroy(); return; }
+        const wsSig = verifyWsCookie(parseCookie(req.headers.cookie, 'ws_sig'));
+        if (!wsSig) { socket.destroy(); return; }
+        const wsPort = wsSig.port;
 
         // /proxy/:internalPort/* → WS direct vers IP interne (ex: Claude Code MCP)
         const urlPath    = (req.url || '').split('?')[0];
         const portMatch  = urlPath.match(/^\/proxy\/(\d+)/);
         if (portMatch) {
-            resolveContainerIP(parseInt(wsPort))
+            resolveContainerIP(wsPort)
                 .then(ip => {
                     if (!ip) { socket.destroy(); return; }
                     proxyWS(req, socket, head, ip, parseInt(portMatch[1]));
