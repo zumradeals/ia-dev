@@ -833,6 +833,18 @@ async function confirmTemplate() {
   await doStartWorkspace(_selectedTpl);
 }
 
+async function waitWorkspaceReady(maxWaitMs = 120000) {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const r = await API.get('/api/workspace/ready');
+      if (r.ready) return true;
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  }
+  return false;
+}
+
 async function doStartWorkspace(template) {
   const btn = document.getElementById('btn-start');
   const obBtn = document.getElementById('ob-action-ws');
@@ -841,6 +853,11 @@ async function doStartWorkspace(template) {
   try {
     const data = await API.post('/api/workspace/start', { template });
     if (data.error) { toast(data.error, false); return; }
+
+    // Attendre que le serveur soit vraiment prêt avant de rafraîchir l'UI
+    [btn, obBtn].forEach(b => { if (b) b.innerHTML = '<span class="spinner"></span> Initialisation…'; });
+    await waitWorkspaceReady();
+
     toast('Environnement démarré !');
     await loadWorkspace();
   } finally {
@@ -1007,23 +1024,40 @@ const LANG_COLORS = {
 };
 
 async function loadRepos() {
-  document.getElementById('repos-no-token').style.display  = 'none';
-  document.getElementById('repos-loading').style.display   = 'flex';
-  document.getElementById('repos-container').style.display = 'none';
-  document.getElementById('repo-count').textContent        = '';
+  const elNoToken   = document.getElementById('repos-no-token');
+  const elLoading   = document.getElementById('repos-loading');
+  const elContainer = document.getElementById('repos-container');
+  const elCount     = document.getElementById('repo-count');
 
-  const data = await API.get('/api/github/repos');
-  document.getElementById('repos-loading').style.display = 'none';
+  elNoToken.style.display   = 'none';
+  elLoading.style.display   = 'flex';
+  elContainer.style.display = 'none';
+  elCount.textContent       = '';
 
-  if (data.error) {
-    document.getElementById('repos-no-token').style.display = 'block';
-    return;
+  try {
+    const data = await API.get('/api/github/repos');
+    elLoading.style.display = 'none';
+
+    if (data.error) {
+      const noToken = data.error.toLowerCase().includes('non configuré') || data.error.toLowerCase().includes('not found');
+      if (noToken) {
+        elNoToken.style.display = 'block';
+      } else {
+        // Erreur GitHub API (token expiré, rate limit, etc.)
+        toast(data.error, false);
+        elNoToken.style.display = 'block';
+      }
+      return;
+    }
+
+    allRepos = data;
+    elCount.textContent = `(${allRepos.length})`;
+    filterRepos();
+    elContainer.style.display = 'block';
+  } catch {
+    elLoading.style.display = 'none';
+    toast('Impossible de charger les dépôts — réessayez', false);
   }
-
-  allRepos = data;
-  document.getElementById('repo-count').textContent = `(${allRepos.length})`;
-  filterRepos();
-  document.getElementById('repos-container').style.display = 'block';
 }
 
 function filterRepos() {
@@ -1157,14 +1191,33 @@ async function startOnboarding(repoName, workspaceUrl, preOpenedWin) {
   }
 }
 
-// Navigue le tab pré-ouvert (ou ouvre un nouveau si fermé)
+// Navigue le tab pré-ouvert (ou ouvre un nouvel onglet si fermé/bloqué)
+// Ne navigue JAMAIS la page courante pour ne pas perdre la liste des repos.
 function _openWorkspace() {
   if (_obWindow && !_obWindow.closed) {
     _obWindow.location.href = _obWorkspaceUrl;
-  } else {
-    // Fallback : navigation dans le même onglet si le tab pré-ouvert a été fermé
-    location.href = _obWorkspaceUrl;
+    return;
   }
+  // Tab pré-ouvert fermé ou popup bloqué : tenter un nouvel onglet
+  const w = window.open(_obWorkspaceUrl, '_blank');
+  if (!w) {
+    // Popup toujours bloqué : afficher un lien cliquable persistant
+    _showWorkspaceOpenLink(_obWorkspaceUrl);
+  }
+}
+
+function _showWorkspaceOpenLink(url) {
+  // Afficher une bannière persistante avec lien (toast classique trop court)
+  let banner = document.getElementById('ws-open-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'ws-open-banner';
+    banner.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#6366f1;color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;z-index:9999;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    document.body.appendChild(banner);
+  }
+  const safeUrl = /^https?:\/\//.test(url) ? url : '#';
+  banner.innerHTML = `<span>Workspace prêt</span><a href="${safeUrl}" target="_blank" rel="noopener" style="color:#fff;font-weight:700;text-decoration:underline">Ouvrir →</a><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px;padding:0 4px">✕</button>`;
+  setTimeout(() => { banner?.remove(); }, 30000);
 }
 
 function showOnboardingResult(r) {

@@ -153,9 +153,45 @@ const workspaceProxy = createProxyMiddleware({
     ws: true,
     on: {
         error: (err, req, res) => {
-            if (res && !res.headersSent && typeof res.status === 'function') {
+            if (!res || res.headersSent || typeof res.status !== 'function') return;
+            // ECONNREFUSED / ECONNRESET = conteneur pas encore prêt → page de chargement auto-refresh
+            const isStarting = err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
+            if (isStarting) {
+                res.status(503).type('html').send(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="4">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GamadCode — Démarrage en cours…</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a14;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.wrap{text-align:center;max-width:420px;padding:32px 24px}
+.logo{font-size:28px;font-weight:900;background:linear-gradient(135deg,#6366f1,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:32px}
+.spinner{width:48px;height:48px;border:3px solid #1e1e35;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 24px}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:18px;font-weight:600;margin-bottom:8px}
+p{color:#64748b;font-size:14px;line-height:1.6}
+.hint{margin-top:24px;font-size:12px;color:#475569}
+.hint a{color:#6366f1;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">GamadCode Studio</div>
+  <div class="spinner"></div>
+  <h1>Démarrage de votre environnement…</h1>
+  <p>Votre espace de travail est en cours d'initialisation.<br>Cette page se recharge automatiquement.</p>
+  <div class="hint">Si cela prend plus de 2 minutes, <a href="https://app.gamad.net/my">retournez sur app.gamad.net</a>.</div>
+</div>
+</body>
+</html>`);
+            } else {
                 res.status(502).type('html').send(
-                    'Workspace inaccessible — vérifiez qu\'il est démarré sur <a href="https://app.gamad.net/my">app.gamad.net</a>.'
+                    `<style>body{font-family:sans-serif;background:#0a0a14;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px}</style>
+                    <h2>Workspace inaccessible</h2>
+                    <p>Vérifiez qu'il est démarré sur <a href="https://app.gamad.net/my" style="color:#6366f1">app.gamad.net</a>.</p>`
                 );
             }
         }
@@ -749,6 +785,31 @@ app.get('/api/admin/metrics', requireUser, requireAdmin, async (req, res) => {
     if (!db) return res.status(503).json({ error: 'DB non disponible' });
     try { res.json(await metricsLib.getAllMetrics()); }
     catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Vérifie si le serveur OpenVSCode est prêt dans le conteneur (HTTP GET sur port 8080)
+app.get('/api/workspace/ready', requireUser, async (req, res) => {
+    loadLibs();
+    if (!db) return res.json({ ready: false });
+    try {
+        const r = await db.query(
+            "SELECT port FROM workspaces WHERE user_id = $1 AND status = 'running'",
+            [req.session.userId]
+        );
+        if (!r.rows.length) return res.json({ ready: false });
+        const port = r.rows[0].port;
+        await new Promise((resolve, reject) => {
+            const req2 = http.get({ hostname: '127.0.0.1', port, path: '/', timeout: 2000 }, (r2) => {
+                r2.resume();
+                resolve();
+            });
+            req2.on('error', reject);
+            req2.on('timeout', () => { req2.destroy(); reject(new Error('timeout')); });
+        });
+        res.json({ ready: true });
+    } catch {
+        res.json({ ready: false });
+    }
 });
 
 app.post('/api/workspace/start', requireUser, async (req, res) => {
