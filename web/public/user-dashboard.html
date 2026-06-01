@@ -871,13 +871,10 @@ async function launchTool(tool) {
   const original = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Ouverture…';
-  // Ouvrir avant l'await pour rester dans la user-gesture (évite le popup blocker)
-  const win = window.open('', '_blank');
   try {
     const data = await API.post('/api/workspace/launch', { tool });
-    if (data.error) { if (win) win.close(); toast(data.error, false); return; }
-    if (win) win.location.href = data.url;
-    else location.href = data.url;
+    if (data.error) { toast(data.error, false); return; }
+    _openExternalUrl(data.url);
   } finally {
     btn.disabled = false;
     btn.innerHTML = original;
@@ -1138,19 +1135,11 @@ function openRepoBtn(btn) {
 async function openRepo(cloneUrl, repoName, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
-  // Ouvrir le tab immédiatement dans le gesture utilisateur
-  // (window.open après await est bloqué par les popup blockers)
-  const win = window.open('', '_blank');
   try {
     const data = await API.post('/api/workspace/open-repo', { cloneUrl, repoName });
-    if (data.error) {
-      if (win) win.close();
-      toast(data.error, false);
-      return;
-    }
-    await startOnboarding(repoName, data.url, win);
+    if (data.error) { toast(data.error, false); return; }
+    await startOnboarding(repoName, data.url);
   } catch {
-    if (win) win.close();
     toast('Erreur lors du chargement du dépôt', false);
   } finally {
     btn.disabled = false;
@@ -1162,13 +1151,11 @@ async function openRepo(cloneUrl, repoName, btn) {
 let _obRepoName = null;
 let _obWorkspaceUrl = null;
 let _obAnalysis = null;
-let _obWindow = null;  // tab pré-ouvert dans le gesture utilisateur
 
-async function startOnboarding(repoName, workspaceUrl, preOpenedWin) {
+async function startOnboarding(repoName, workspaceUrl) {
   _obRepoName     = repoName;
   _obWorkspaceUrl = workspaceUrl;
   _obAnalysis     = null;
-  _obWindow       = preOpenedWin || null;
 
   document.getElementById('ob-analyzing').style.display = 'block';
   document.getElementById('ob-result').style.display    = 'none';
@@ -1191,23 +1178,22 @@ async function startOnboarding(repoName, workspaceUrl, preOpenedWin) {
   }
 }
 
-// Navigue le tab pré-ouvert (ou ouvre un nouvel onglet si fermé/bloqué)
-// Ne navigue JAMAIS la page courante pour ne pas perdre la liste des repos.
+// Ouvre le workspace dans un nouvel onglet. Ne navigue JAMAIS la page courante.
 function _openWorkspace() {
-  if (_obWindow && !_obWindow.closed) {
-    _obWindow.location.href = _obWorkspaceUrl;
-    return;
-  }
-  // Tab pré-ouvert fermé ou popup bloqué : tenter un nouvel onglet
-  const w = window.open(_obWorkspaceUrl, '_blank');
-  if (!w) {
-    // Popup toujours bloqué : afficher un lien cliquable persistant
-    _showWorkspaceOpenLink(_obWorkspaceUrl);
+  _openExternalUrl(_obWorkspaceUrl);
+}
+
+// Ouvre une URL externe dans un nouvel onglet.
+// Si le popup est bloqué, affiche une bannière cliquable persistante.
+// Ne navigue JAMAIS la page courante (pas de location.href).
+function _openExternalUrl(url) {
+  const w = window.open(url, '_blank');
+  if (!w || w === window) {
+    _showWorkspaceOpenLink(url);
   }
 }
 
 function _showWorkspaceOpenLink(url) {
-  // Afficher une bannière persistante avec lien (toast classique trop court)
   let banner = document.getElementById('ws-open-banner');
   if (!banner) {
     banner = document.createElement('div');
